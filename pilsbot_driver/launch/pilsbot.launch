@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="pilsbot_driver" type="pilsbot_driver_node" name="pilsbot_driver_node">
+        <param name="port" value="/dev/ttyS0"/>
+    </node>
+    <include file="$(find pilsbot_control)/launch/pilsbot_control.launch" />
+</launch>

@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>pilsbot_hw_ros</name>
+  <version>0.0.0</version>
+  <description>The pilsbot_ros package</description>
+
+  <maintainer email="j.hackbarth@cubegaming.de">Johannes Hackbarth</maintainer>
+
+  <license>TODO</license>
+
+  <!-- <url type="website">http://wiki.ros.org/pilsbot_ros</url> -->
+
+  <author email="j.hackbarth@cubegaming.de">Johannes Hackbarth</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>pilsbot_control</depend>
+  <depend>pilsbot_driver</depend>
+
+</package>

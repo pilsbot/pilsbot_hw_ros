@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>pilsbot_control</name>
+  <version>0.0.0</version>
+  <description>The pilsbot_control package</description>
+
+  <maintainer email="j.hackbarth@cubegaming.de">Johannes Hackbarth</maintainer>
+
+  <license>TODO</license>
+
+  <author email="j.hackbarth@cubegaming.de">Johannes Hackbarth</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>controller_manager</depend>
+
+</package>
