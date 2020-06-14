@@ -51,8 +51,9 @@ PilsbotDriver::PilsbotDriver(ros::NodeHandle nh, ros::NodeHandle nh_priv)
   tcsetattr(port_fd, TCSANOW, &options);
 
   api = new HoverboardAPI(serialWrite);
-  api->scheduleRead(HoverboardAPI::Codes::sensHall, -1, 20, PROTOCOL_SOM_NOACK);
-  api->scheduleRead(HoverboardAPI::Codes::sensElectrical, -1, 20, PROTOCOL_SOM_NOACK);
+  // Doesn't work for some reason.
+  // api->scheduleRead(HoverboardAPI::Codes::sensHall, -1, 20, PROTOCOL_SOM_NOACK);
+  // api->scheduleRead(HoverboardAPI::Codes::sensElectrical, -1, 20, PROTOCOL_SOM_NOACK);
 
   current_status.level = 0;
   current_status.name = "Pilsbot Driver";
@@ -76,6 +77,9 @@ PilsbotDriver::~PilsbotDriver()
 
 void PilsbotDriver::read()
 {
+  api->requestRead(HoverboardAPI::Codes::sensHall);
+  api->requestRead(HoverboardAPI::Codes::sensElectrical);
+
   if (port_fd != -1)
   {
     unsigned char c;
