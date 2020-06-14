@@ -1,7 +1,7 @@
 <launch>
     <arg name="joy_config" default="ps4_pad" />
     <arg name="joy_dev" default="/dev/input/js0" />
-    <arg name="cmd_vel" default="/pilsbot/cmd_vel"/>
+    <arg name="cmd_vel" default="/pilsbot_velocity_controller/cmd_vel"/>
 
     <node pkg="aliencontrol" type="aliencontrol" name="aliencontrol_ds4drv" output="screen">
         <param name="cmd" value="ds4drv"/>
