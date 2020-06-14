@@ -22,6 +22,7 @@ int main(int argc, char *argv[])
     const ros::Duration period = time - prev_time;
 
     pilsbot.read();
+    pilsbot.update_diagnostics();
     cm.update(time, period);
     pilsbot.write();
     pilsbot.tick();
