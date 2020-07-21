@@ -14,7 +14,7 @@ pilsbot_velocity_controller:
   # diff_drive_controller will attempt to read either one or both from the
   # URDF if not specified as a parameter
   wheel_separation : 0.62
-  wheel_radius : 0.0825
+  wheel_radius : 0.125
 
   # Wheel separation and radius multipliers
   wheel_separation_multiplier: 1.0 # default: 1.0
@@ -34,16 +34,16 @@ pilsbot_velocity_controller:
   linear:
     x:
       has_velocity_limits    : true
-      max_velocity           : 2.0  # m/s
+      max_velocity           : 1.5  # m/s
       has_acceleration_limits: true
-      max_acceleration       : 0.1  # m/s^2
-      has_jerk_limits        : true
+      max_acceleration       : 1.5  # m/s^2
+      has_jerk_limits        : false
       max_jerk               : 0.1  # m/s^3
   angular:
     z:
       has_velocity_limits    : true
-      max_velocity           : 6.28  # rad/s
+      max_velocity           : 1.0  # rad/s
       has_acceleration_limits: true
       max_acceleration       : 3.14  # rad/s^2
-      has_jerk_limits        : true
+      has_jerk_limits        : false
       max_jerk               : 3.14  # rad/s^3
