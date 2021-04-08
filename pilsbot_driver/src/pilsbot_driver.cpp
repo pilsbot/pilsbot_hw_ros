@@ -12,30 +12,62 @@ int serialWrite(unsigned char* data, int len)
   return (int)write(port_fd, data, len);
 }
 
-PilsbotDriver::PilsbotDriver(ros::NodeHandle nh, ros::NodeHandle nh_priv)
+namespace pilsbot_driver
 {
-  _nh = nh;
-  _nh_priv = _nh_priv;
 
-  hardware_interface::JointStateHandle left_wheel_state_handle("left_wheel", &pos[0], &vel[0], &eff[0]);
-  hardware_interface::JointStateHandle right_wheel_state_handle("right_wheel", &pos[1], &vel[1], &eff[1]);
-  joint_state_interface.registerHandle(left_wheel_state_handle);
-  joint_state_interface.registerHandle(right_wheel_state_handle);
-  registerInterface(&joint_state_interface);
+// PilsbotDriver::PilsbotDriver(double wheel_radius, std::string &port) : hardware_interface::BaseInterface<hardware_interface::SystemInterface>()
+// {
+//   this->wheel_radius = wheel_radius;
+//   this->port = port;
 
-  hardware_interface::JointHandle left_wheel_vel_handle(joint_state_interface.getHandle("left_wheel"), &cmd[0]);
-  hardware_interface::JointHandle right_wheel_vel_handle(joint_state_interface.getHandle("right_wheel"), &cmd[1]);
-  velocity_joint_interface.registerHandle(left_wheel_vel_handle);
-  velocity_joint_interface.registerHandle(right_wheel_vel_handle);
-  registerInterface(&velocity_joint_interface);
+//   // _nh_priv.param<double>("wheel_radius", wheel_radius, 0.0825);
+//   // _nh_priv.param<std::string>("port", port, "/dev/ttyS0");
 
-  _nh_priv.param<double>("wheel_radius", wheel_radius, 0.0825);
-  _nh_priv.param<std::string>("port", port, "/dev/ttyS0");
+//   api = new HoverboardAPI(serialWrite);
 
+//   // current_status.level = 0;
+//   // current_status.name = "Pilsbot Driver";
+//   // current_status.hardware_id = "pilsbot_serial1";
+
+//   // diagnostic_msgs::KeyValue battery_level;
+//   // battery_level.key = "Battery Level";
+//   // battery_level.value = "";
+//   // current_status.values.push_back(battery_level);
+
+//   // diagnostics_pub.reset(new realtime_tools::RealtimePublisher<diagnostic_msgs::DiagnosticStatus>(_nh, "status", 5));
+// }
+
+PilsbotDriver::~PilsbotDriver()
+{
+  delete api;
+}
+
+hardware_interface::return_type PilsbotDriver::configure(const hardware_interface::HardwareInfo &info)
+{
+  this->wheel_radius = 0.0825; // TODO: Get as param
+  this->port = "/dev/ttyS0";
+
+  clock = rclcpp::Clock();
+
+  if (configure_default(info) != hardware_interface::return_type::OK)
+  {
+    return hardware_interface::return_type::ERROR;
+  }
+  else
+  {
+    hw_states_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
+    hw_commands_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
+
+    return hardware_interface::return_type::OK;
+  }
+}
+
+hardware_interface::return_type PilsbotDriver::start()
+{
   if ((port_fd = open(port.c_str(), O_RDWR | O_NOCTTY | O_NDELAY)) < 0)
   {
-    ROS_FATAL("Cannot open serial port to pilsbot");
-    exit(-1);
+    RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"), "Cannot open serial port to pilsbot");
+    return hardware_interface::return_type::ERROR;
   }
 
   // CONFIGURE THE UART -- connecting to the board
@@ -50,32 +82,31 @@ PilsbotDriver::PilsbotDriver(ros::NodeHandle nh, ros::NodeHandle nh_priv)
   tcflush(port_fd, TCIFLUSH);
   tcsetattr(port_fd, TCSANOW, &options);
 
-  api = new HoverboardAPI(serialWrite);
-  // Doesn't work for some reason.
+  // Doesn't work for some reason. Need to investigate
   // api->scheduleRead(HoverboardAPI::Codes::sensHall, -1, 20, PROTOCOL_SOM_NOACK);
   // api->scheduleRead(HoverboardAPI::Codes::sensElectrical, -1, 20, PROTOCOL_SOM_NOACK);
 
-  current_status.level = 0;
-  current_status.name = "Pilsbot Driver";
-  current_status.hardware_id = "pilsbot_serial1";
+  for (uint i = 0; i < this->hw_states_.size(); i++) 
+  {
+    if (std::isnan(this->hw_states_[i])) 
+    {
+        this->hw_states_[i] = 0;
+        this->hw_commands_[i] = 0;
+    }
+  }
 
-  diagnostic_msgs::KeyValue battery_level;
-  battery_level.key = "Battery Level";
-  battery_level.value = "";
-  current_status.values.push_back(battery_level);
-
-  diagnostics_pub.reset(new realtime_tools::RealtimePublisher<diagnostic_msgs::DiagnosticStatus>(_nh, "status", 5));
+  return hardware_interface::return_type::OK;
 }
 
-PilsbotDriver::~PilsbotDriver()
+hardware_interface::return_type PilsbotDriver::stop()
 {
   if (port_fd != -1)
     close(port_fd);
 
-  delete api;
+  return hardware_interface::return_type::OK;
 }
 
-void PilsbotDriver::read()
+hardware_interface::return_type PilsbotDriver::read()
 {
   api->requestRead(HoverboardAPI::Codes::sensHall);
   api->requestRead(HoverboardAPI::Codes::sensElectrical);
@@ -92,18 +123,20 @@ void PilsbotDriver::read()
 
     if (i > 0)
     {
-      last_read = ros::Time::now();
+      last_read = clock.now();
     }
 
     if (r < 0 && errno != EAGAIN)
     {
-      ROS_ERROR("Reading from serial %s failed: %d", port.c_str(), r);
+      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"), "Reading from serial %s failed: %d", port.c_str(), r);
+      return hardware_interface::return_type::ERROR;
     }
   }
 
-  if ((ros::Time::now() - last_read).toSec() > 1)
+  if ((clock.now() - last_read) > rclcpp::Duration(1, 0))
   {
-    ROS_FATAL("Timeout reading from serial %s failed", port.c_str());
+    RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"), "Timeout reading from serial %s failed", port.c_str());
+    return hardware_interface::return_type::ERROR;
   }
 
   // Convert m/s to rad/s
@@ -115,44 +148,61 @@ void PilsbotDriver::read()
   // Don't know what to do with it, just ignoring for now
   if (fabs(sens_speed0) < 10000 && fabs(sens_speed1) < 10000)
   {
-    vel[0] = (sens_speed0 / 1000.0) / wheel_radius;
-    vel[1] = (sens_speed1 / 1000.0) / wheel_radius;
-    pos[0] = (api->getPosition0_mm() / 1000.0) / wheel_radius;
-    pos[1] = (api->getPosition1_mm() / 1000.0) / wheel_radius;
+    hw_states_[0] = (sens_speed0 / 1000.0) / wheel_radius;
+    hw_states_[1] = (sens_speed1 / 1000.0) / wheel_radius;
+    hw_states_[2] = (api->getPosition0_mm() / 1000.0) / wheel_radius;
+    hw_states_[3] = (api->getPosition1_mm() / 1000.0) / wheel_radius;
+    return hardware_interface::return_type::OK;
   }
+  else
+    return hardware_interface::return_type::ERROR;
 
 }
 
-void PilsbotDriver::write()
+hardware_interface::return_type PilsbotDriver::write()
 {
   if (port_fd == -1)
   {
-    ROS_ERROR("Attempt to write on closed serial");
-    return;
+    RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"), "Attempt to write on closed serial");
+    return hardware_interface::return_type::ERROR;
   }
 
   // Convert rad/s to m/s
-  double left_speed = cmd[0] * wheel_radius;
-  double right_speed = cmd[1] * wheel_radius;
+  double left_speed = hw_commands_[0] * wheel_radius;
+  double right_speed = hw_commands_[1] * wheel_radius;
 
-  // Cap according to dynamic_reconfigure
+  // TODO: Cap according to dynamic_reconfigure!!
   const int max_power = 100;
   const int min_speed = 40;
   api->sendSpeedData(left_speed, right_speed, max_power, min_speed);
+
+  tick();
+
+  return hardware_interface::return_type::OK;
 }
 
-void PilsbotDriver::update_diagnostics()
-{
-  current_status.values[0].value = std::to_string(api->getBatteryVoltage());
+// TODO: Update for ROS 2
+// void PilsbotDriver::update_diagnostics()
+// {
+//   current_status.values[0].value = std::to_string(api->getBatteryVoltage());
 
-  if (diagnostics_pub->trylock())
-  {
-    diagnostics_pub->msg_= current_status;
-    diagnostics_pub->unlockAndPublish();
-  }
-}
+//   if (diagnostics_pub->trylock())
+//   {
+//     diagnostics_pub->msg_= current_status;
+//     diagnostics_pub->unlockAndPublish();
+//   }
+// }
 
 void PilsbotDriver::tick()
 {
   api->protocolTick();
 }
+
+}
+
+#include "pluginlib/class_list_macros.hpp"
+
+PLUGINLIB_EXPORT_CLASS(
+  pilsbot_driver::PilsbotDriver,
+  hardware_interface::SystemInterface
+)

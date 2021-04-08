@@ -2,24 +2,21 @@
 
 int main(int argc, char *argv[])
 {
-  ros::init(argc, argv, "pislbot_driver");
+  rclcpp::init(argc, argv);
 
-  ros::NodeHandle nh;
-  ros::NodeHandle nh_priv("~");
-
-  PilsbotDriver pilsbot(nh, nh_priv);
+  PilsbotDriver pilsbot();
   controller_manager::ControllerManager cm(&pilsbot);
 
   ros::AsyncSpinner spinner(1);
   spinner.start();
 
-  ros::Time prev_time = ros::Time::now();
-  ros::Rate rate(50.0);
+  rclcpp::Time prev_time = rclcpp::Time::now();
+  rclcpp::Rate rate(50.0);
 
   while (ros::ok())
   {
-    const ros::Time time = ros::Time::now();
-    const ros::Duration period = time - prev_time;
+    const rclcpp::Time time = rclcpp::Clock::now();
+    const rclcpp::Duration period = time - prev_time;
 
     pilsbot.read();
     pilsbot.update_diagnostics();

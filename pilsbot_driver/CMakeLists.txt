@@ -1,29 +1,28 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.5.0)
 project(pilsbot_driver)
 
-find_package(catkin REQUIRED COMPONENTS controller_manager diagnostic_msgs dynamic_reconfigure hardware_interface realtime_tools roscpp std_msgs)
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-catkin_package(
-    CATKIN_DEPENDS
-    controller_manager
-        diagnostic_msgs
-        dynamic_reconfigure
-        hardware_interface
-        realtime_tools
-        roscpp
-        std_msgs
-    INCLUDE_DIRS include
-)
+find_package(ament_cmake REQUIRED)
+find_package(controller_manager REQUIRED)
+find_package(hardware_interface REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
+# find_package(dynamic_reconfigure REQUIRED)
+find_package(rclcpp REQUIRED)
 
 include_directories(
   include
   src/hoverboard/src
   src/hoverboard/src/hbprotocol
-  ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(${PROJECT_NAME}_node 
-  src/pilsbot_driver_node.cpp
+add_library(${PROJECT_NAME}
+  SHARED
   src/pilsbot_driver.cpp
   src/hoverboard/src/HoverboardAPI.cpp
   src/hoverboard/src/protocolFunctions.c
@@ -31,25 +30,29 @@ add_executable(${PROJECT_NAME}_node
   src/hoverboard/src/hbprotocol/protocol.c
   src/hoverboard/src/hbprotocol/machine_protocol.c)
 
-# catkin_install_python(PROGRAMS
+pluginlib_export_plugin_description_file(hardware_interface pilsbot_driver.xml)
 
-## Mark executables for installation
-## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_executables.html
-# install(TARGETS ${PROJECT_NAME}_node
+ament_target_dependencies(${PROJECT_NAME}
+                          controller_manager
+                          diagnostic_msgs
+                          hardware_interface
+                          rclcpp)
 
-## Mark libraries for installation
-## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_libraries.html
-# install(TARGETS ${PROJECT_NAME}
-#   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
-
-target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES})
-install(TARGETS ${PROJECT_NAME}_node
-        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+install(TARGETS ${PROJECT_NAME}
+        DESTINATION lib
 )
-install(DIRECTORY include/${PROJECT_NAME}/
-        DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+install(DIRECTORY include/
+        DESTINATION include
 )
 install(FILES launch/pilsbot.launch launch/teleop.launch
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+        DESTINATION share/${PROJECT_NAME}}/launch
 )
-install(FILES config/ps4_pad.yaml DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config)
+install(FILES config/ps4_pad.yaml DESTINATION share/${PROJECT_NAME}/config)
+
+ament_export_dependencies(controller_manager
+                         controller_manager
+                         hardware_interface
+                         #realtime_tools
+                         rclcpp)
+ament_export_include_directories(include)
+ament_package()

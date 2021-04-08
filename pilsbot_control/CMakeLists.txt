@@ -1,9 +1,9 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.5.0)
 project(pilsbot_control)
 
-find_package(catkin REQUIRED)
+find_package(ament_cmake REQUIRED)
 
-catkin_package()
+ament_package()
 
 # catkin_install_python(PROGRAMS
 
@@ -17,8 +17,8 @@ catkin_package()
 #   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
 
 install(FILES config/diff_drive_controller.yaml
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config
+        DESTINATION share/${PROJECT_NAME}/config
 )
 install(FILES launch/pilsbot_control.launch
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+        DESTINATION share/${PROJECT_NAME}/launch
 )

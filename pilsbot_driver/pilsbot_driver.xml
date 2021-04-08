@@ -1,0 +1,9 @@
+<library path="pilsbot_driver">
+  <class name="pilsbot_driver/PilsbotDriver"
+         type="pilsbot_driver::PilsbotDriver"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      The ROS 2 driver interace to the Pilsbot hardware.
+    </description>
+  </class>
+</library>
