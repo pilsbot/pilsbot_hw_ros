@@ -11,10 +11,9 @@
   <author email="j.hackbarth@cubegaming.de">Johannes Hackbarth</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <depend>aliencontrol</depend>
+  <!-- <depend>aliencontrol</depend> -->
   <depend>controller_manager</depend>
   <depend>diagnostic_msgs</depend>
-  <depend>dynamic_reconfigure</depend>
   <depend>hardware_interface</depend>
   <depend>joy</depend>
   <depend>pilsbot_control</depend>
