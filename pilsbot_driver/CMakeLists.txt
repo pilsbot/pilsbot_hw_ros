@@ -12,7 +12,6 @@ find_package(ament_cmake REQUIRED)
 find_package(controller_manager REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
-# find_package(dynamic_reconfigure REQUIRED)
 find_package(rclcpp REQUIRED)
 
 include_directories(
@@ -44,7 +43,7 @@ install(TARGETS ${PROJECT_NAME}
 install(DIRECTORY include/
         DESTINATION include
 )
-install(FILES launch/pilsbot.launch launch/teleop.launch
+install(FILES launch/pilsbot.launch launch/teleop.launch launch/pilsbot.launch.py
         DESTINATION share/${PROJECT_NAME}}/launch
 )
 install(FILES config/ps4_pad.yaml DESTINATION share/${PROJECT_NAME}/config)
