@@ -1,0 +1,18 @@
+version: "3"
+services:
+  pilsbot_hw_ros:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pilsbot/pilsbot_hw_ros
+    container_name: pilsbot_hw_ros
+    environment:
+    volumes:
+      - /dev:/dev
+      - ..:/colcon_ws/src/pilsbot_hw_ros
+    privileged: true
+    network_mode: host
+    restart: ${RESTART_POLICY}
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    # command: bash 
