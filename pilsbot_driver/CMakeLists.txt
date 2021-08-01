@@ -44,7 +44,7 @@ install(DIRECTORY include/
         DESTINATION include
 )
 install(FILES launch/pilsbot.launch launch/teleop.launch launch/pilsbot.launch.py
-        DESTINATION share/${PROJECT_NAME}}/launch
+        DESTINATION share/${PROJECT_NAME}/launch
 )
 install(FILES config/ps4_pad.yaml DESTINATION share/${PROJECT_NAME}/config)
 
