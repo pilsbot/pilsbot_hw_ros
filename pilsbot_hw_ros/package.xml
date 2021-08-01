@@ -1,4 +1,5 @@
 <?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>pilsbot_hw_ros</name>
   <version>0.0.0</version>
@@ -8,12 +9,14 @@
 
   <license>TODO</license>
 
-  <!-- <url type="website">http://wiki.ros.org/pilsbot_ros</url> -->
-
   <author email="j.hackbarth@cubegaming.de">Johannes Hackbarth</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <depend>pilsbot_control</depend>
-  <depend>pilsbot_driver</depend>
+  <build_depend>>pilsbot_control</build_depend>
+  <build_depend>>pilsbot_driver</build_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 
 </package>

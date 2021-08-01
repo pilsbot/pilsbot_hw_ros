@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.5.0)
 project(pilsbot_driver)
 
+# Default to C99
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
+endif()
+
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
 endif()
@@ -37,6 +42,13 @@ ament_target_dependencies(${PROJECT_NAME}
                           hardware_interface
                           rclcpp)
 
+ament_export_dependencies(controller_manager
+                          controller_manager
+                          hardware_interface
+                          rclcpp)
+ ament_export_include_directories(include)
+ ament_package()
+
 install(TARGETS ${PROJECT_NAME}
         DESTINATION lib
 )
@@ -47,11 +59,3 @@ install(FILES launch/pilsbot.launch launch/teleop.launch launch/pilsbot.launch.p
         DESTINATION share/${PROJECT_NAME}/launch
 )
 install(FILES config/ps4_pad.yaml DESTINATION share/${PROJECT_NAME}/config)
-
-ament_export_dependencies(controller_manager
-                         controller_manager
-                         hardware_interface
-                         #realtime_tools
-                         rclcpp)
-ament_export_include_directories(include)
-ament_package()
