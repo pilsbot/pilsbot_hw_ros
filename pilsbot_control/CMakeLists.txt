@@ -5,9 +5,8 @@ find_package(ament_cmake REQUIRED)
 
 ament_package()
 
-install(FILES config/diff_drive_controller.yaml
+install(FILES 
+			config/diff_drive_controller.yaml
+			config/acker_diff_controller.yaml
         DESTINATION share/${PROJECT_NAME}/config
-)
-install(FILES launch/pilsbot_control.launch
-        DESTINATION share/${PROJECT_NAME}/launch
 )

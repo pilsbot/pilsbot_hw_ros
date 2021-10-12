@@ -1,6 +1,0 @@
-<?xml version="1.0"?>
-<launch>
-    <rosparam file="$(find pilsbot_control)/config/diff_drive_controller.yaml" command="load"/>
-    <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen"
-        args="pilsbot_joint_publisher pilsbot_velocity_controller" />
-</launch>
