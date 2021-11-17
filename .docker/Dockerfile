@@ -20,7 +20,7 @@ WORKDIR /colcon_ws
 RUN cd src && \
   # git clone --recursive -b ${ROS_DISTRO}-devel https://github.com/pilsbot/pilsbot_hw_ros.git && \
   git clone https://github.com/pilsbot/pilsbot_description.git && \
-  git clone -b dashing-devel https://github.com/ros/xacro.git && \
+  git clone -b ros2 https://github.com/ros/xacro.git && \
   git clone https://github.com/ros-controls/ros2_control.git && \
   git clone https://github.com/ros-controls/ros2_controllers.git && \
   git clone -b ${ROS_DISTRO}-devel https://github.com/ros-controls/control_msgs.git && \
