@@ -15,7 +15,6 @@
 // #include <diagnostic_msgs/DiagnosticArray.h>
 // #include <diagnostic_msgs/KeyValue.h>
 
-// constexpr
 constexpr int max_length = 1024;
 
 class HoverboardAPI;
@@ -23,6 +22,7 @@ class HoverboardAPI;
 namespace pilsbot_driver
 {
 
+//TODO: Make this Directly a SystemInterface, probably
 class PilsbotDriver : public hardware_interface::BaseInterface<hardware_interface::SystemInterface>
 {
 public:
@@ -43,22 +43,37 @@ public:
   void tick();
 
 private:
-  // The units for wheels are radians (pos), radians per second (vel,cmd), and Netwton metres (eff)
-  // double pos[2];
-  // double vel[2];
-  // double eff[2];
-  // double cmd[2];
 
-  std::vector<double> hw_commands_;
-  std::vector<double> hw_states_;
+  struct WheelStatus {
+    double commanded_turning_rate = 0;
+    double curr_position = 0;
+    double curr_speed = 0;
+  };
+
+  struct Sensors {
+      double voltage = 0;
+      double avg_amperage_motor0 = 0;
+      double avg_amperage_motor1 = 0;
+      double txBufferLevel = 0;
+  };
+
+  struct Params {
+    double wheel_radius = 0.0825;
+    std::string device = "/dev/ttyS0";
+    unsigned serial_connect_retries = 30;
+    unsigned max_power = 100;   //limit is around 1000, I think
+    unsigned min_speed = 40;    // Somehow convoluted with wheel_radius.
+                                // Minimum calculated speed to have the wheels moving.
+  } params_;
+
+  std::vector<WheelStatus> wheels_;
+  double current_steering_angle_ = 0;
+  Sensors sensors_;
 
   rclcpp::Clock clock;
 
-  double wheel_radius;
   rclcpp::Time last_read;
   HoverboardAPI *api;
-
-  std::string port;
 
   // ros::NodeHandle _nh;
   // ros::NodeHandle _nh_priv;

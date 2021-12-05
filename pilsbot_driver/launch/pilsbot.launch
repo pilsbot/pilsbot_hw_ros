@@ -3,6 +3,8 @@
     <node pkg="pilsbot_driver" type="pilsbot_driver_node" name="pilsbot_driver_node">
         <param name="port" value="/dev/ttyS0"/>
         <param name="wheel_radius" value="0.125"/>
+        <param name="max_power" value="100"/>
+        <param name="min_speed" value="40"/>
     </node>
     <include file="$(find pilsbot_control)/launch/pilsbot_control.launch" />
 </launch>

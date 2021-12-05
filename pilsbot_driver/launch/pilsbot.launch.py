@@ -27,21 +27,20 @@ def generate_launch_description():
     # Get URDF via xacro
     robot_description_path = os.path.join(
         get_package_share_directory('pilsbot_description'),
-        'description',
-        'pilsbot.urdf.xacro')
+        'urdf', 'pilsbot.urdf.xacro')
     robot_description_config = xacro.process_file(robot_description_path)
     robot_description = {'robot_description': robot_description_config.toxml()}
 
-    pilsbot_diff_drive_controller = os.path.join(
+    pilsbot_acker_diff_controller_config = os.path.join(
         get_package_share_directory('pilsbot_control'),
         'config',
-        'pilsbot_control.yaml'
+        'acker_diff_controller.yaml'
         )
 
     control_node = Node(
       package='controller_manager',
       executable='ros2_control_node',
-      parameters=[robot_description, pilsbot_diff_drive_controller],
+      parameters=[robot_description, pilsbot_acker_diff_controller_config],
       output={
           'stdout': 'screen',
           'stderr': 'screen',
