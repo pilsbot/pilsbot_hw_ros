@@ -1,4 +1,4 @@
-FROM ros:foxy-ros-base-l4t-r32.4.4
+FROM dustynv/ros:foxy-ros-base-l4t-r32.4.4
 
 ENV ROS_DISTRO foxy
 
