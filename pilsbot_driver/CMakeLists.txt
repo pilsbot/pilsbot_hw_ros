@@ -18,6 +18,7 @@ find_package(controller_manager REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(pilsbot_driver_msgs REQUIRED)
 
 include_directories(
   include
@@ -25,7 +26,9 @@ include_directories(
   src/hoverboard/src/hbprotocol
 )
 
-add_library(${PROJECT_NAME}
+
+# hoverboard_driver
+add_library(pilsbot_driver
   SHARED
   src/pilsbot_driver.cpp
   src/hoverboard/src/HoverboardAPI.cpp
@@ -34,20 +37,30 @@ add_library(${PROJECT_NAME}
   src/hoverboard/src/hbprotocol/protocol.c
   src/hoverboard/src/hbprotocol/machine_protocol.c)
 
+ament_target_dependencies(pilsbot_driver
+                          controller_manager #diagnostic_msgs
+                          hardware_interface
+                          rclcpp)
+
+
+# sensors
+add_executable(head_mcu_node
+  src/head_mcu_node.cpp
+)
+ament_target_dependencies(head_mcu_node
+  rclcpp
+  pilsbot_driver_msgs) 
+
+
 pluginlib_export_plugin_description_file(hardware_interface pilsbot_driver.xml)
 
-ament_target_dependencies(${PROJECT_NAME}
-                          controller_manager
-                          diagnostic_msgs
-                          hardware_interface
-                          rclcpp)
-
 ament_export_dependencies(controller_manager
-                          controller_manager
                           hardware_interface
                           rclcpp)
- ament_export_include_directories(include)
- ament_package()
+                         
+ament_export_include_directories(include)
+ament_package()
+
 
 install(TARGETS ${PROJECT_NAME}
         DESTINATION lib
@@ -55,7 +68,11 @@ install(TARGETS ${PROJECT_NAME}
 install(DIRECTORY include/
         DESTINATION include
 )
-install(FILES launch/pilsbot.launch launch/teleop.launch launch/pilsbot.launch.py
-        DESTINATION share/${PROJECT_NAME}/launch
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}/launch
 )
-install(FILES config/ps4_pad.yaml DESTINATION share/${PROJECT_NAME}/config)
+install(DIRECTORY
+  config
+  DESTINATION share/${PROJECT_NAME}
+)

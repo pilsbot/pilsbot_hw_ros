@@ -6,13 +6,14 @@
   <description>The pilsbot_driver package contains all hardware related drivers.</description>
 
   <maintainer email="j.hackbarth@cubegaming.de">Johannes Hackbarth</maintainer>
+  <maintainer email="info@pascalpieper.de">Pascal Pieper</maintainer>
 
   <license>MIT</license>
 
   <author email="j.hackbarth@cubegaming.de">Johannes Hackbarth</author>
+  <author email="info@pascalpieper.de">Pascal Pieper</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <!-- <depend>aliencontrol</depend> -->
   <depend>controller_manager</depend>
   <depend>diagnostic_msgs</depend>
   <depend>hardware_interface</depend>
@@ -21,6 +22,7 @@
   <depend>realtime_tools</depend>
   <depend>rclcpp</depend>
   <depend>teleop_twist_joy</depend>
+  <depend>pilsbot_driver_msgs</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

@@ -12,8 +12,9 @@
   <author email="j.hackbarth@cubegaming.de">Johannes Hackbarth</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <build_depend>>pilsbot_control</build_depend>
-  <build_depend>>pilsbot_driver</build_depend>
+  <build_depend>pilsbot_control</build_depend>
+  <build_depend>pilsbot_driver_msgs</build_depend>
+  <build_depend>pilsbot_driver</build_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
