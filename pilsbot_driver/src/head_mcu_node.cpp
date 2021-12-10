@@ -4,21 +4,7 @@
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
-
-// fuck you custom message
-//#include "pilsbot_driver_msgs/msg/SteeringAxleSensorsStamped.hpp"
-struct SteeringAxleSensors {
-  float steering_angle_raw;
-  bool endstop_l;
-  bool endstop_r;
-  float steering_angle_normalized;
-};
-
-struct SteeringAxleSensorsStamped {
-  rclcpp::Time stamp;
-  SteeringAxleSensors sensors;
-};
-// end fuck
+#include "pilsbot_driver_msgs/msg/steering_axle_sensors_stamped.hpp"
 
 
 #include <fcntl.h>
@@ -27,6 +13,7 @@ struct SteeringAxleSensorsStamped {
 
 
 using namespace std::chrono_literals;
+using namespace pilsbot_driver_msgs::msg;
 
 class Head_MCU_node : public rclcpp::Node
 {
@@ -54,7 +41,7 @@ class Head_MCU_node : public rclcpp::Node
       this->declare_parameter<CalibrationList>("calibration_val",CalibrationList());
 
 
-      out_ = this->create_publisher<SteeringAxleSensorsStamped>(PREFIX, 10);
+      out_ = this->create_publisher<SteeringAxleSensorsStamped>("/head_mcu", 10);
 
       params_.devicename = this->get_parameter("serial_port").as_string();
       params_.publish_rate = this->get_parameter("publish_rate").as_int();
