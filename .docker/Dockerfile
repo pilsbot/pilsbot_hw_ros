@@ -18,24 +18,28 @@ RUN mkdir -p /colcon_ws/src
 WORKDIR /colcon_ws
 
 RUN cd src && \
-  # git clone --recursive -b ${ROS_DISTRO}-devel https://github.com/pilsbot/pilsbot_hw_ros.git && \
+  git clone --recursive -b ${ROS_DISTRO}-devel https://github.com/pilsbot/pilsbot_hw_ros.git && \
   git clone https://github.com/pilsbot/pilsbot_description.git && \
+  git clone --recursive https://github.com/pilsbot/pils_control.git && \
+  git clone -b ros2 https://github.com/ros-drivers/ackermann_msgs.git && \
   git clone -b ros2 https://github.com/ros/xacro.git && \
-  git clone https://github.com/ros-controls/ros2_control.git && \
-  git clone https://github.com/ros-controls/ros2_controllers.git && \
+  git clone -b ${ROS_DISTRO} https://github.com/ros-controls/ros2_control.git && \
+  # remove for now
+  # git clone -b ${ROS_DISTRO} https://github.com/ros-controls/ros2_controllers.git && \
   git clone -b ${ROS_DISTRO}-devel https://github.com/ros-controls/control_msgs.git && \
   git clone -b ${ROS_DISTRO}-devel https://github.com/ros-controls/realtime_tools.git && \
-  cd .. 
-  # && rosdep install --from-paths src --ignore-src -r -y
+  cd .. \
+  && rosdep install --from-paths src --ignore-src -r -y
 
 RUN mv /bin/sh /bin/sh_tmp && ln -s /bin/bash /bin/sh
 
 RUN source /opt/ros/${ROS_DISTRO}/install/setup.bash && \
-    colcon build --symlink-install --packages-up-to pilsbot_hw_ros
+    colcon build --symlink-install 
+    #--packages-up-to pilsbot_hw_ros
 
 RUN rm /bin/sh && mv /bin/sh_tmp /bin/sh
 RUN touch /root/.bashrc && \ 
-  echo "source /colcon_ws/install/local_setup.bash\n" >> /root/.bashrc
+  echo "source /colcon_ws/install/setup.bash \n" >> /root/.bashrc
 
 RUN rm -rf /var/lib/apt/lists/*
 
