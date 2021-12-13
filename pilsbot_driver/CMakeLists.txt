@@ -61,9 +61,10 @@ ament_export_dependencies(controller_manager
 ament_export_include_directories(include)
 ament_package()
 
-
-install(TARGETS ${PROJECT_NAME}
-        DESTINATION lib
+install(TARGETS 
+        pilsbot_driver
+        head_mcu_node
+        DESTINATION lib/${PROJECT_NAME}	#fixme: before it was directly lib, without projext name
 )
 install(DIRECTORY include/
         DESTINATION include
