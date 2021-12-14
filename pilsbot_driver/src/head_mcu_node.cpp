@@ -4,58 +4,15 @@
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
-#include "pilsbot_driver_msgs/msg/steering_axle_sensors_stamped.hpp"
+#include <pilsbot_driver_msgs/msg/steering_axle_sensors_stamped.hpp>
 
 #include "./head_mcu/include/data_frame.hpp"
+#include <pilsbot_driver/linear_interpolation.hpp>
 
 #include <fcntl.h>
 #include <termios.h>
 #include <unistd.h>
 #include <csignal>
-
-template<typename FROM, typename TO> class LinearInterpolator {
-public:
-  struct Point {
-    FROM x; TO y;
-  };
-
-  typedef std::vector<Point> CalibrationList;
-
-private:
-  CalibrationList cal_;
-public:
-  LinearInterpolator(CalibrationList& cal) : cal_(cal){};
-  //default mapping
-  LinearInterpolator() : cal_({{0, 0},{1,1}}){};
-
-  TO operator()(FROM from){
-    Point low,high;
-    if(from <= cal_.front().x) {
-      if(from < cal_.front().x) {
-        std::cout << "Warn: X val " << from << " is lower than calibration range "
-            << cal_.front().x << "-" << cal_.back().x << std::endl;
-      }
-      low = cal_[0];
-      high = cal_[1];
-    } else if (from >= cal_[cal_.size()-2].x) {
-      if(from > cal_.back().x) {
-        std::cout << "Warn: X val " << from << " is higher than calibration range "
-            << cal_.front().x << "-" << cal_.back().x << std::endl;
-      }
-      low = cal_[cal_.size()-2];
-      high = cal_[cal_.size()-1];
-    } else {
-      auto lower_bound = std::partition_point(cal_.begin(), cal_.end(),
-          [from](const auto& s) { return s.x < from; });
-      low = *(lower_bound-1);
-      high = *lower_bound;
-    }
-
-    auto dx = (high.x - low.x);
-    auto dy = (high.y - low.y);
-    return low.y + (from - low.x) * dy / dx;
-  }
-};
 
 
 using namespace std::chrono_literals;
@@ -79,7 +36,7 @@ class Head_MCU_node : public rclcpp::Node
   SteeringAxleSensorsStamped state_;
   std::mutex state_m_;
   bool state_updated_;
-  std::condition_variable state_updated_cv;
+  std::condition_variable state_updated_cv_;
 
   std::thread reading_funtion_;
   std::thread publishing_funtion_;
@@ -153,7 +110,7 @@ class Head_MCU_node : public rclcpp::Node
   void stop() {
     ::close(serial_fd_); // then read returns
     stop_ = true;
-    state_updated_cv.notify_all(); // consumer may wait on update
+    state_updated_cv_.notify_all(); // consumer may wait on update
     if(reading_funtion_.joinable()) {
       reading_funtion_.join();
     }
@@ -239,7 +196,7 @@ class Head_MCU_node : public rclcpp::Node
           std::lock_guard<std::mutex> lk(state_m_); // why exacyly this?
           state_updated_ = true;
         }
-        state_updated_cv.notify_one();  // might as well be "all", we just have one consumer
+        state_updated_cv_.notify_one();  // might as well be "all", we just have one consumer
 
       } else if(ret > 0) {
         RCLCPP_WARN(this->get_logger(),
@@ -260,7 +217,7 @@ class Head_MCU_node : public rclcpp::Node
       {
         // Wait until new data was received via serial
         std::unique_lock<std::mutex> lk(state_m_);
-        state_updated_cv.wait(lk, [&]{return state_updated_ || stop_;});
+        state_updated_cv_.wait(lk, [&]{return state_updated_ || stop_;});
         if(stop_)
           return;
 

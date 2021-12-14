@@ -15,28 +15,7 @@ int serialWrite(unsigned char* data, int len)
 
 namespace pilsbot_driver
 {
-
-// PilsbotDriver::PilsbotDriver(double wheel_radius, std::string &port) : hardware_interface::BaseInterface<hardware_interface::SystemInterface>()
-// {
-//   this->wheel_radius = wheel_radius;
-//   this->port = port;
-
-//   // _nh_priv.param<double>("wheel_radius", wheel_radius, 0.0825);
-//   // _nh_priv.param<std::string>("port", port, "/dev/ttyS0");
-
-//   api = new HoverboardAPI(serialWrite);
-
-//   // current_status.level = 0;
-//   // current_status.name = "Pilsbot Driver";
-//   // current_status.hardware_id = "pilsbot_serial1";
-
-//   // diagnostic_msgs::KeyValue battery_level;
-//   // battery_level.key = "Battery Level";
-//   // battery_level.value = "";
-//   // current_status.values.push_back(battery_level);
-
-//   // diagnostics_pub.reset(new realtime_tools::RealtimePublisher<diagnostic_msgs::DiagnosticStatus>(_nh, "status", 5));
-// }
+using std::placeholders::_1;
 
 PilsbotDriver::~PilsbotDriver()
 {
@@ -69,40 +48,59 @@ PilsbotDriver::export_state_interfaces()
       state_interfaces.emplace_back(hardware_interface::StateInterface(
         joint.name, hardware_interface::HW_IF_VELOCITY, &wheels_[1].curr_speed));
     }
-    else if (joint.name == "steering_axle_joint") { // todo: Make this configurable
+    else if (joint.name == "steering_axle_joint") { // todo: Make this name configurable
       state_interfaces.emplace_back(hardware_interface::StateInterface(
-        joint.name, hardware_interface::HW_IF_POSITION, &current_steering_angle_));
+        joint.name, hardware_interface::HW_IF_POSITION, &axle_sensors_.steering_angle_normalized));
     }
   }
 
   // export sensor state interface
   for (auto& sens : info_.sensors)
   {
-    if (sens.name == "hoverboard_api" &&
-        sens.state_interfaces.size() <= 4) {
+    if (sens.name == "hoverboard_api") {
       for(auto& interface : sens.state_interfaces) {
         if(interface.name == "voltage") {
           state_interfaces.emplace_back(hardware_interface::StateInterface(
-               sens.name, interface.name, &sensors_.voltage));
+               sens.name, interface.name, &hoverboard_sensors_.voltage));
         }
         else if (interface.name == "avg_amperage_motor.0") {
           state_interfaces.emplace_back(hardware_interface::StateInterface(
-               sens.name, interface.name, &sensors_.avg_amperage_motor0));
+               sens.name, interface.name, &hoverboard_sensors_.avg_amperage_motor0));
         }
         else if (interface.name == "avg_amperage_motor.1") {
           state_interfaces.emplace_back(hardware_interface::StateInterface(
-               sens.name, interface.name, &sensors_.avg_amperage_motor1));
+               sens.name, interface.name, &hoverboard_sensors_.avg_amperage_motor1));
         }
         else if (interface.name == "tx_bufferlevel") {
           state_interfaces.emplace_back(hardware_interface::StateInterface(
-               sens.name, interface.name, &sensors_.txBufferLevel));
+               sens.name, interface.name, &hoverboard_sensors_.txBufferLevel));
         } else {
           RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
                "Not offering interface %s in sensor %s",
                interface.name, sens.name);
         }
       }
-    } else {
+    } else if (sens.name == "head_mcu") {
+      for(auto& interface : sens.state_interfaces) {
+        if(interface.name == "steering_angle_raw") {
+          state_interfaces.emplace_back(hardware_interface::StateInterface(
+               sens.name, interface.name, &axle_sensors_.steering_angle_raw));
+        }
+        else if (interface.name == "endstop_l") {
+          state_interfaces.emplace_back(hardware_interface::StateInterface(
+               sens.name, interface.name, &axle_sensors_.endstop_l));
+        }
+        else if (interface.name == "endstop_r") {
+          state_interfaces.emplace_back(hardware_interface::StateInterface(
+               sens.name, interface.name, &axle_sensors_.endstop_r));
+        }
+        else {
+          RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+               "Not offering interface %s in sensor %s",
+               interface.name, sens.name);
+        }
+      }
+    }else {
       RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
            "Not offering sensor %s", sens.name);
     }
@@ -144,14 +142,13 @@ hardware_interface::return_type PilsbotDriver::configure(const hardware_interfac
 
     if(info_.sensors.size() > 1) {
     RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
-                 "Pilsbot driver currently only has 2 Sensors available (requested: %d)",
+                 "Pilsbot driver currently only has 2 HoverboardSensors available (requested: %d)",
                  info_.sensors.size() );
       return hardware_interface::return_type::ERROR;
     }
 
     wheels_.resize(2, WheelStatus());
-    sensors_ = Sensors();
-    current_steering_angle_ = 0;
+    hoverboard_sensors_ = HoverboardSensors();
 
     //todo: something with info_.hardware_parameters
     // is this the only param possibility? Or also yaml-shit?
@@ -166,11 +163,11 @@ hardware_interface::return_type PilsbotDriver::start()
   unsigned retries = 0;
   bool still_unsuccessful = true;
   while(retries < params_.serial_connect_retries) {
-    if ((port_fd = open(params_.device.c_str(), O_RDWR | O_NOCTTY | O_NDELAY)) < 0)
+    if ((port_fd = open(params_.hoverboard_tty_device.c_str(), O_RDWR | O_NOCTTY | O_NDELAY)) < 0)
     {
       RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
                    "Cannot open serial device %s to pilsbot, retrying...",
-                   params_.device);
+                   params_.hoverboard_tty_device);
       rclcpp::sleep_for(std::chrono::seconds(1));
     } else {
       still_unsuccessful = false;
@@ -180,7 +177,7 @@ hardware_interface::return_type PilsbotDriver::start()
   if(still_unsuccessful) {
     RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
                  "Could not open serial device %s to pilsbot controller board",
-                 params_.device);
+                 params_.hoverboard_tty_device);
     return hardware_interface::return_type::ERROR;
   }
 
@@ -239,7 +236,7 @@ hardware_interface::return_type PilsbotDriver::read()
     if (r < 0 && errno != EAGAIN)
     {
       RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"), "Reading from serial %s failed: %d",
-          params_.device.c_str(), r);
+          params_.hoverboard_tty_device.c_str(), r);
       return hardware_interface::return_type::ERROR;
     }
   }
@@ -247,16 +244,17 @@ hardware_interface::return_type PilsbotDriver::read()
   if ((clock.now() - last_read) > rclcpp::Duration(1, 0))
   {
     RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"), "Timeout reading from serial %s failed",
-        params_.device.c_str());
+        params_.hoverboard_tty_device.c_str());
     return hardware_interface::return_type::ERROR;
   }
 
+  // steering angle & co are updated in subscriber
+
   // sensory
-  current_steering_angle_ = 0;  // TODO: Get this from a separate topic
-  sensors_.voltage = api->getBatteryVoltage();
-  sensors_.avg_amperage_motor0 = api->getMotorAmpsAvg(0);
-  sensors_.avg_amperage_motor1 = api->getMotorAmpsAvg(1);
-  sensors_.txBufferLevel = api->getTxBufferLevel();
+  hoverboard_sensors_.voltage = api->getBatteryVoltage();
+  hoverboard_sensors_.avg_amperage_motor0 = api->getMotorAmpsAvg(0);
+  hoverboard_sensors_.avg_amperage_motor1 = api->getMotorAmpsAvg(1);
+  hoverboard_sensors_.txBufferLevel = api->getTxBufferLevel();
 
   // Convert m/s to rad/s
   double sens_speed0 = api->getSpeed0_mms();

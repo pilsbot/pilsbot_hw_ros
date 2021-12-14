@@ -21,12 +21,10 @@ class HoverboardAPI;
 
 namespace pilsbot_driver
 {
-
 //TODO: Make this Directly a SystemInterface, probably
 class PilsbotDriver : public hardware_interface::BaseInterface<hardware_interface::SystemInterface>
 {
 public:
-  //PilsbotDriver(double wheel_radius, std::string &port);
   ~PilsbotDriver();
   RCLCPP_SHARED_PTR_DEFINITIONS(PilsbotDriver)
 
@@ -50,16 +48,24 @@ private:
     double curr_speed = 0;
   };
 
-  struct Sensors {
+  struct HoverboardSensors {
       double voltage = 0;
       double avg_amperage_motor0 = 0;
       double avg_amperage_motor1 = 0;
       double txBufferLevel = 0;
   };
 
+  struct SteeringAxleSensors {
+      double steering_angle_raw;
+      double endstop_l;     // stupid state interface only allows double
+      double endstop_r;     // stupid state interface only allows double
+      double steering_angle_normalized;
+  };
+
   struct Params {
     double wheel_radius = 0.0825;
-    std::string device = "/dev/ttyS0";
+    std::string hoverboard_tty_device = "/dev/ttyS0";
+    std::string head_mcu_tty_device = "/dev/ttyACM0";
     unsigned serial_connect_retries = 30;
     unsigned max_power = 100;   //limit is around 1000, I think
     unsigned min_speed = 40;    // Somehow convoluted with wheel_radius.
@@ -67,19 +73,13 @@ private:
   } params_;
 
   std::vector<WheelStatus> wheels_;
-  double current_steering_angle_ = 0;
-  Sensors sensors_;
+  SteeringAxleSensors axle_sensors_;
+  HoverboardSensors hoverboard_sensors_;
 
   rclcpp::Clock clock;
 
   rclcpp::Time last_read;
   HoverboardAPI *api;
-
-  // ros::NodeHandle _nh;
-  // ros::NodeHandle _nh_priv;
-
-  // diagnostic_msgs::DiagnosticStatus current_status;
-  // realtime_tools::RealtimePublisherSharedPtr<diagnostic_msgs::DiagnosticStatus> diagnostics_pub;
 };
 
 }

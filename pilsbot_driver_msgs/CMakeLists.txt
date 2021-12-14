@@ -24,6 +24,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SteeringAxleSensors.msg"
   "msg/SteeringAxleSensorsStamped.msg"
+  "msg/HoverboardAPISensors.msg"
   DEPENDENCIES builtin_interfaces #std_msgs
 )
 
