@@ -13,18 +13,65 @@
 #include <unistd.h>
 #include <csignal>
 
+template<typename FROM, typename TO> class LinearInterpolator {
+public:
+  struct Point {
+    FROM x; TO y;
+  };
+
+  typedef std::vector<Point> CalibrationList;
+
+private:
+  CalibrationList cal_;
+public:
+  LinearInterpolator(CalibrationList& cal) : cal_(cal){};
+  //default mapping
+  LinearInterpolator() : cal_({{0, 0},{1,1}}){};
+
+  TO operator()(FROM from){
+    Point low,high;
+    if(from <= cal_.front().x) {
+      if(from < cal_.front().x) {
+        std::cout << "Warn: X val " << from << " is lower than calibration range "
+            << cal_.front().x << "-" << cal_.back().x << std::endl;
+      }
+      low = cal_[0];
+      high = cal_[1];
+    } else if (from >= cal_[cal_.size()-2].x) {
+      if(from > cal_.back().x) {
+        std::cout << "Warn: X val " << from << " is higher than calibration range "
+            << cal_.front().x << "-" << cal_.back().x << std::endl;
+      }
+      low = cal_[cal_.size()-2];
+      high = cal_[cal_.size()-1];
+    } else {
+      auto lower_bound = std::partition_point(cal_.begin(), cal_.end(),
+          [from](const auto& s) { return s.x < from; });
+      low = *(lower_bound-1);
+      high = *lower_bound;
+    }
+
+    auto dx = (high.x - low.x);
+    auto dy = (high.y - low.y);
+    return low.y + (from - low.x) * dy / dx;
+  }
+};
+
+
 using namespace std::chrono_literals;
 using namespace pilsbot_driver_msgs::msg;
 
 class Head_MCU_node : public rclcpp::Node
 {
-  typedef std::vector<double> CalibrationList;  // interpreted as pairs
+  typedef std::vector<double> CalibrationListSerialized;  // interpreted as pairs
   struct Parameter {
-    CalibrationList calibration;
     std::string devicename;
     unsigned baud_rate;
     unsigned publish_rate;
   } params_;
+
+  typedef LinearInterpolator<unsigned, double> PotInterpolator;
+  PotInterpolator interpolator_;
 
   int serial_fd_ = -1;
   std::atomic<bool> stop_;
@@ -46,7 +93,8 @@ class Head_MCU_node : public rclcpp::Node
       this->declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");
       this->declare_parameter<int>("baud_rate", 115200);
       this->declare_parameter<int>("publish_rate", 10);
-      this->declare_parameter<CalibrationList>("calibration_val",CalibrationList());
+      this->declare_parameter<CalibrationListSerialized>("calibration_val",
+          CalibrationListSerialized());
 
       out_ = this->create_publisher<SteeringAxleSensorsStamped>("/head_mcu", 10);
 
@@ -55,7 +103,37 @@ class Head_MCU_node : public rclcpp::Node
       params_.publish_rate = this->get_parameter("publish_rate").as_int();
       std::cout << params_.publish_rate << std::endl;
       assert(params_.publish_rate > 0);
-      //params_.calibration = this->get_parameter("calibration_val").as_what?
+
+      CalibrationListSerialized raw_cal = this->get_parameter("calibration_val").as_double_array();
+      if(raw_cal.size() < 4 || raw_cal.size() % 2 != 0)
+      {
+        RCLCPP_ERROR(this->get_logger(),
+          "number of calibration values is invalid (>4, %2), is: %d\n"
+          "Using default 1:1 mapping.", raw_cal.size());
+        interpolator_ = PotInterpolator();  //using default mapping
+      } else {
+        PotInterpolator::CalibrationList cal;
+        for(unsigned i = 0; i < raw_cal.size(); i+=2) {
+          if(i > 1) {
+            if(raw_cal[i-2] >= raw_cal[i]) {
+              RCLCPP_ERROR(this->get_logger(),
+                "Calibration X-values are not sorted and inequal!\n"
+                "Elem %d (%lf) >= Elem %d (%lf)",
+                i-2, raw_cal[i-2], i, raw_cal[i]);
+              return;
+            }
+            if(raw_cal[i-1] >= raw_cal[i+1]) {
+              RCLCPP_ERROR(this->get_logger(),
+                "Calibration Y-values are not sorted and inequal!\n"
+                "Elem %d (%lf) >= Elem %d (%lf)",
+                i-1, raw_cal[i-1], i+1, raw_cal[i+1]);
+              return;
+            }
+          }
+          cal.push_back({static_cast<unsigned>(raw_cal[i]), raw_cal[i+1]});
+        }
+        interpolator_ = PotInterpolator(cal);
+      }
 
       if(!open_serial_port())
         return;
@@ -66,9 +144,6 @@ class Head_MCU_node : public rclcpp::Node
       stop_ = false;
       publishing_funtion_ = std::thread(&Head_MCU_node::publish_state, this);
       reading_funtion_ = std::thread(&Head_MCU_node::read_serial, this);
-
-      RCLCPP_INFO(this->get_logger(),
-          "created timer for publisher at a period of %lfs", 1./params_.publish_rate);
     }
 
   ~Head_MCU_node() {
@@ -195,7 +270,8 @@ class Head_MCU_node : public rclcpp::Node
         //unlock happens implicitly
       }
 
-      // todo: process normalized angle
+      local_state.sensors.steering_angle_normalized =
+          interpolator_(local_state.sensors.steering_angle_raw);
       out_->publish(local_state);
 
     }
