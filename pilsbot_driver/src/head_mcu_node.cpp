@@ -17,10 +17,10 @@
 
 using namespace std::chrono_literals;
 using namespace pilsbot_driver_msgs::msg;
+using linear_interpolator::CalibrationListSerialized;
 
 class Head_MCU_node : public rclcpp::Node
 {
-  typedef std::vector<double> CalibrationListSerialized;  // interpreted as pairs
   struct Parameter {
     std::string devicename;
     unsigned baud_rate;
@@ -38,8 +38,8 @@ class Head_MCU_node : public rclcpp::Node
   bool state_updated_;
   std::condition_variable state_updated_cv_;
 
-  std::thread reading_funtion_;
-  std::thread publishing_funtion_;
+  std::thread reading_function_;
+  std::thread publishing_function_;
 
 
   rclcpp::Publisher<SteeringAxleSensorsStamped>::SharedPtr out_;
@@ -61,35 +61,9 @@ class Head_MCU_node : public rclcpp::Node
       std::cout << params_.publish_rate << std::endl;
       assert(params_.publish_rate > 0);
 
-      CalibrationListSerialized raw_cal = this->get_parameter("calibration_val").as_double_array();
-      if(raw_cal.size() < 4 || raw_cal.size() % 2 != 0)
-      {
-        RCLCPP_ERROR(this->get_logger(),
-          "number of calibration values is invalid (>4, %2), is: %d\n"
-          "Using default 1:1 mapping.", raw_cal.size());
-        interpolator_ = PotInterpolator();  //using default mapping
-      } else {
-        PotInterpolator::CalibrationList cal;
-        for(unsigned i = 0; i < raw_cal.size(); i+=2) {
-          if(i > 1) {
-            if(raw_cal[i-2] >= raw_cal[i]) {
-              RCLCPP_ERROR(this->get_logger(),
-                "Calibration X-values are not sorted and inequal!\n"
-                "Elem %d (%lf) >= Elem %d (%lf)",
-                i-2, raw_cal[i-2], i, raw_cal[i]);
-              return;
-            }
-            if(raw_cal[i-1] >= raw_cal[i+1]) {
-              RCLCPP_ERROR(this->get_logger(),
-                "Calibration Y-values are not sorted and inequal!\n"
-                "Elem %d (%lf) >= Elem %d (%lf)",
-                i-1, raw_cal[i-1], i+1, raw_cal[i+1]);
-              return;
-            }
-          }
-          cal.push_back({static_cast<unsigned>(raw_cal[i]), raw_cal[i+1]});
-        }
-        interpolator_ = PotInterpolator(cal);
+      if(! interpolator_.deserialize(
+          this->get_parameter("calibration_val").as_double_array())) {
+        RCLCPP_ERROR(this->get_logger(), "calibration values could not be loaded");
       }
 
       if(!open_serial_port())
@@ -99,8 +73,8 @@ class Head_MCU_node : public rclcpp::Node
           "Opened device %s with baudrate %d", params_.devicename.c_str(),params_.baud_rate);
 
       stop_ = false;
-      publishing_funtion_ = std::thread(&Head_MCU_node::publish_state, this);
-      reading_funtion_ = std::thread(&Head_MCU_node::read_serial, this);
+      publishing_function_ = std::thread(&Head_MCU_node::publish_state, this);
+      reading_function_ = std::thread(&Head_MCU_node::read_serial, this);
     }
 
   ~Head_MCU_node() {
@@ -111,11 +85,11 @@ class Head_MCU_node : public rclcpp::Node
     ::close(serial_fd_); // then read returns
     stop_ = true;
     state_updated_cv_.notify_all(); // consumer may wait on update
-    if(reading_funtion_.joinable()) {
-      reading_funtion_.join();
+    if(reading_function_.joinable()) {
+      reading_function_.join();
     }
-    if(publishing_funtion_.joinable()) {
-      publishing_funtion_.join();
+    if(publishing_function_.joinable()) {
+      publishing_function_.join();
     }
   }
 
@@ -173,7 +147,6 @@ class Head_MCU_node : public rclcpp::Node
     }
     RCLCPP_INFO(this->get_logger(),
         "Probably successfully set update period of %d ms", period_ms);
-
   }
 
   void read_serial() {
@@ -205,8 +178,7 @@ class Head_MCU_node : public rclcpp::Node
       } else {
         RCLCPP_ERROR(this->get_logger(),
             "serial connection closed or something: %d", ret);
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(500/params_.publish_rate));
+        return;
       }
     }
   }

@@ -11,19 +11,24 @@
 
 #include <rclcpp/rclcpp.hpp>
 
+#include <pilsbot_driver/linear_interpolation.hpp>
+
 // #include <diagnostic_msgs/DiagnosticStatus.h>
 // #include <diagnostic_msgs/DiagnosticArray.h>
 // #include <diagnostic_msgs/KeyValue.h>
 
 constexpr int max_length = 1024;
+int hoverboard_fd = -1;
 
 class HoverboardAPI;
+using linear_interpolator::CalibrationListSerialized;
 
 namespace pilsbot_driver
 {
-//TODO: Make this Directly a SystemInterface, probably
+//TODO: Make this Directly a SystemInterface, probably perhaps maybe dunno
 class PilsbotDriver : public hardware_interface::BaseInterface<hardware_interface::SystemInterface>
 {
+  typedef LinearInterpolator<unsigned, double> PotInterpolator;
 public:
   ~PilsbotDriver();
   RCLCPP_SHARED_PTR_DEFINITIONS(PilsbotDriver)
@@ -39,6 +44,7 @@ public:
 
   void update_diagnostics();
   void tick();
+  void read_from_head_mcu();
 
 private:
 
@@ -64,17 +70,32 @@ private:
 
   struct Params {
     double wheel_radius = 0.0825;
-    std::string hoverboard_tty_device = "/dev/ttyS0";
-    std::string head_mcu_tty_device = "/dev/ttyACM0";
+    struct {
+      std::string tty_device = "/dev/ttyS0";
+      unsigned max_power = 100;   //limit is around 1000, I think
+      unsigned min_speed = 40;    // Somehow convoluted with wheel_radius.
+    } hoverboard;
+    struct {
+      std::string tty_device = "/dev/ttyACM0";
+      unsigned baudrate = 115200;
+      unsigned update_period_ms = 5;
+      CalibrationListSerialized calibration_val = {0, -1, 65500, 1};
+    } head_mcu;
     unsigned serial_connect_retries = 30;
-    unsigned max_power = 100;   //limit is around 1000, I think
-    unsigned min_speed = 40;    // Somehow convoluted with wheel_radius.
                                 // Minimum calculated speed to have the wheels moving.
   } params_;
 
+  //int hoverboard_fd = -1; // declared globally because of ugly api
+  int head_mcu_fd = -1;
+
   std::vector<WheelStatus> wheels_;
-  SteeringAxleSensors axle_sensors_;
   HoverboardSensors hoverboard_sensors_;
+
+  // head_mcu threading
+  std::atomic<bool> stop_;
+  PotInterpolator interpolator_;
+  SteeringAxleSensors axle_sensors_;
+  std::thread reading_function_;
 
   rclcpp::Clock clock;
 
