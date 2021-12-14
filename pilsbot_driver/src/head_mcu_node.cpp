@@ -26,7 +26,7 @@ class Head_MCU_node : public rclcpp::Node
     unsigned publish_rate;
   } params_;
 
-  int serial_fd = -1;
+  int serial_fd_ = -1;
 
   SteeringAxleSensorsStamped state_;
 
@@ -50,23 +50,9 @@ class Head_MCU_node : public rclcpp::Node
       assert(params_.publish_rate > 0);
       //params_.calibration = this->get_parameter("calibration_val").as_what?
 
-      if ((serial_fd = ::open(params_.devicename.c_str(), O_RDWR | O_NOCTTY | O_NDELAY)) < 0) {
-        RCLCPP_ERROR(this->get_logger(),
-                     "Cannot open serial device %s to head_mcu!",
-                     params_.devicename.c_str());
+      if(!open_serial_port())
         return;
-      }
-
-      struct termios tio;
-      tcgetattr(serial_fd, &tio);
-      tio.c_cflag = CS8 | CLOCAL | CREAD;
-      tio.c_iflag = IGNPAR;
-      tio.c_oflag = 0;
-      tio.c_lflag = 0;
-      //tcflush(serial_fd, TCIFLUSH);
-      cfsetispeed(&tio, params_.baud_rate);
-      tcsetattr(serial_fd, TCSANOW, &tio);
-
+      set_serial_properties();
       RCLCPP_INFO(this->get_logger(),
           "Opened device %s with baudrate %d", params_.devicename.c_str(),params_.baud_rate);
 
@@ -81,7 +67,7 @@ class Head_MCU_node : public rclcpp::Node
     }
 
   ~Head_MCU_node() {
-    ::close(serial_fd); // then read returns
+    ::close(serial_fd_); // then read returns
     timer_->cancel();
     stop_ = true;
     if(reading_funtion_.joinable()) {
@@ -95,13 +81,58 @@ class Head_MCU_node : public rclcpp::Node
   std::atomic<bool> stop_;
   std::thread reading_funtion_;
 
+  bool open_serial_port() {
+    if ((serial_fd_ = ::open(params_.devicename.c_str(), O_RDWR | O_NOCTTY)) < 0) {
+      RCLCPP_ERROR(this->get_logger(),
+                   "Cannot open serial device %s to head_mcu!",
+                   params_.devicename.c_str());
+      return false;
+    }
+    return true;
+  }
+
+  void set_serial_properties() {
+    tcflush(serial_fd_, TCIOFLUSH); // flush previous bytes
+
+    struct termios tio;
+    if(!tcgetattr(serial_fd_, &tio))
+      perror("tcgetattr");
+
+    tio.c_iflag &= ~(INLCR | IGNCR | ICRNL | IXON | IXOFF);
+    tio.c_oflag &= ~(ONLCR | OCRNL);
+    tio.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+
+    switch (params_.baud_rate)
+    {
+    case 9600:   cfsetospeed(&tio, B9600);   break;
+    case 19200:  cfsetospeed(&tio, B19200);  break;
+    case 38400:  cfsetospeed(&tio, B38400);  break;
+    case 115200: cfsetospeed(&tio, B115200); break;
+    case 230400: cfsetospeed(&tio, B230400); break;
+    case 460800: cfsetospeed(&tio, B460800); break;
+    case 500000: cfsetospeed(&tio, B500000); break;
+    default:
+      RCLCPP_WARN(this->get_logger(),
+          "Baudrate of %d not supported, using 115200!", params_.baud_rate);
+      cfsetospeed(&tio, B115200);
+      break;
+    }
+    cfsetispeed(&tio, cfgetospeed(&tio));
+
+    if(!tcsetattr(serial_fd_, TCSANOW, &tio)) {
+      RCLCPP_ERROR(this->get_logger(),
+          "Could not set terminal attributes!");
+      perror("tcsetattr");
+    }
+  }
+
   void set_update_period_of_target(head_mcu::UpdatePeriodMs period_ms) {
-    if(::write(serial_fd, &period_ms, sizeof(head_mcu::UpdatePeriodMs)) < 0){
+    if(::write(serial_fd_, &period_ms, sizeof(head_mcu::UpdatePeriodMs)) < 0){
       RCLCPP_ERROR(this->get_logger(),
           "could not set update period of %d ms", period_ms);
     }
     RCLCPP_INFO(this->get_logger(),
-        "Successfully set update period of %d ms", period_ms);
+        "Probably successfully set update period of %d ms", period_ms);
 
   }
 
@@ -113,8 +144,7 @@ class Head_MCU_node : public rclcpp::Node
 
     while(!stop_) {
       head_mcu::Frame frame;
-      // todo: regarding sync, maybe add a preamble to return to sync once lost
-      int ret = ::read(serial_fd, &frame, sizeof(head_mcu::Frame));
+      int ret = ::read(serial_fd_, &frame, sizeof(head_mcu::Frame));
       if(ret == sizeof(head_mcu::Frame)) {
         auto& s = state_.sensors;
         s.steering_angle_raw = frame.analog0;
@@ -124,6 +154,7 @@ class Head_MCU_node : public rclcpp::Node
       } else if(ret > 0) {
         RCLCPP_WARN(this->get_logger(),
             "serial connection out of sync!");
+        // todo: maybe reopen serial, this resets the controller
       } else {
         RCLCPP_ERROR(this->get_logger(),
             "serial connection closed or something: %d", ret);

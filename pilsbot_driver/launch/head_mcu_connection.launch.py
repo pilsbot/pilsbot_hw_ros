@@ -25,7 +25,7 @@ import xacro
 def generate_launch_description():
     example_parameters = [
         {"serial_port": "/dev/ttyACM0"},
-        {"publish_rate": 1}
+        {"publish_rate": 100}
     ]
     
     mcu_node = Node(
