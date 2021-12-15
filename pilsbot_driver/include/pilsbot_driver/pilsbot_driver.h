@@ -71,12 +71,12 @@ private:
   struct Params {
     double wheel_radius = 0.0825;
     struct {
-      std::string tty_device = "/dev/ttyS0";
+      std::string tty_device = "/dev/ttyACM0";
       unsigned max_power = 100;   //limit is around 1000, I think
       unsigned min_speed = 40;    // Somehow convoluted with wheel_radius.
     } hoverboard;
     struct {
-      std::string tty_device = "/dev/ttyACM0";
+      std::string tty_device = "/dev/ttyACM1";
       unsigned baudrate = 115200;
       unsigned update_period_ms = 5;
       CalibrationListSerialized calibration_val = {0, -1, 65500, 1};
