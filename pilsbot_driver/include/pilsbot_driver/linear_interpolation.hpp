@@ -31,20 +31,12 @@ public:
        return false;
      } else {
        CalibrationList cal;
-       for(unsigned i = 0; i < raw_cal.size(); i+=2) {
-         if(i > 1) {
-           if(raw_cal[i-2] >= raw_cal[i]) {
-             std::cerr <<  "Calibration X-values are not sorted and inequal!" << std::endl
-               << "Elem " << i-2 << " (" << raw_cal[i-2] << ") >= "
-               "Elem " << i << " (" << raw_cal[i] << ")" << std::endl;
-             return false;
-           }
-           if(raw_cal[i-1] >= raw_cal[i+1]) {
-             std::cerr <<  "Calibration Y-values are not sorted and inequal!" << std::endl
-               << "Elem " << i-1 << " (" << raw_cal[i-1] << ") >= "
-               "Elem " << i+1 << " (" << raw_cal[i+1] << ")" << std::endl;
-             return false;
-           }
+       for(unsigned i = 2; i < raw_cal.size(); i+=2) {
+         if(raw_cal[i-2] >= raw_cal[i]) {
+           std::cerr <<  "Calibration X-values are not sorted and inequal!" << std::endl
+             << "Elem " << i-2 << " (" << raw_cal[i-2] << ") >= "
+                "Elem " << i << " (" << raw_cal[i] << ")" << std::endl;
+           return false;
          }
          cal.push_back({static_cast<unsigned>(raw_cal[i]), raw_cal[i+1]});
        }
@@ -60,6 +52,7 @@ public:
         std::cout << "Warn: X val " << from << " is lower than calibration range "
             << cal_.front().x << "-" << cal_.back().x << std::endl;
       }
+      // edge case: we hit exactly first Point
       low = cal_[0];
       high = cal_[1];
     } else if (from >= cal_[cal_.size()-2].x) {
@@ -67,8 +60,9 @@ public:
         std::cout << "Warn: X val " << from << " is higher than calibration range "
             << cal_.front().x << "-" << cal_.back().x << std::endl;
       }
-      low = cal_[cal_.size()-2];
-      high = cal_[cal_.size()-1];
+      // use last point pair
+      low = cal_[cal_.size()-2];    // next-to last
+      high = cal_[cal_.size()-1];   // last element
     } else {
       auto lower_bound = std::partition_point(cal_.begin(), cal_.end(),
           [from](const auto& s) { return s.x < from; });
