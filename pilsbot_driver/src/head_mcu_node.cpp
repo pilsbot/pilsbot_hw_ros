@@ -58,7 +58,6 @@ class Head_MCU_node : public rclcpp::Node
       params_.devicename = this->get_parameter("serial_port").as_string();
       params_.baud_rate = this->get_parameter("baud_rate").as_int();
       params_.publish_rate = this->get_parameter("publish_rate").as_int();
-      std::cout << params_.publish_rate << std::endl;
       assert(params_.publish_rate > 0);
 
       if(! interpolator_.deserialize(
@@ -161,8 +160,8 @@ class Head_MCU_node : public rclcpp::Node
       if(ret == sizeof(head_mcu::Frame)) {
         auto& s = state_.sensors;
         s.steering_angle_raw = frame.analog0;
-        s.endstop_l ^= frame.digital0_8.as_bit.bit0;
-        s.endstop_r ^= frame.digital0_8.as_bit.bit1;
+        s.endstop_l = frame.digital0_8.as_bit.bit0;
+        s.endstop_r = frame.digital0_8.as_bit.bit1;
         state_.stamp = this->now();
 
         {
