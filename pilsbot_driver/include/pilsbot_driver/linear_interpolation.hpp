@@ -32,7 +32,7 @@ public:
      } else {
        CalibrationList cal;
        for(unsigned i = 0; i < raw_cal.size(); i+=2) {
-         cal.push_back({static_cast<FROM>(raw_cal[i]), raw_cal[i+1]});
+         cal.push_back({raw_cal[i], raw_cal[i+1]});
        }
        std::sort(cal.begin(), cal.end(),
            [](const auto& lhs, const auto& rhs) {
