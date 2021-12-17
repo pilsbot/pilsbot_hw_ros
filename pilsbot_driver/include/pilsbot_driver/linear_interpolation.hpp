@@ -31,14 +31,15 @@ public:
        return false;
      } else {
        CalibrationList cal;
-       for(unsigned i = 2; i < raw_cal.size(); i+=2) {
-         if(raw_cal[i-2] >= raw_cal[i]) {
+       for(unsigned i = 0; i < raw_cal.size(); i+=2) {
+         if(i >= 2 && raw_cal[i-2] >= raw_cal[i]) {
            std::cerr <<  "Calibration X-values are not sorted and inequal!" << std::endl
              << "Elem " << i-2 << " (" << raw_cal[i-2] << ") >= "
                 "Elem " << i << " (" << raw_cal[i] << ")" << std::endl;
            return false;
          }
-         cal.push_back({static_cast<unsigned>(raw_cal[i]), raw_cal[i+1]});
+         //std::cout << "Pushing pair (" << raw_cal[i] << ":" << raw_cal[i+1] << ")" << std::endl;
+         cal.push_back({static_cast<FROM>(raw_cal[i]), raw_cal[i+1]});
        }
        cal_ = cal;
      }
