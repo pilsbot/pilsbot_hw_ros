@@ -28,8 +28,10 @@ def generate_launch_description():
         {"publish_rate": 100},
         #{"calibration_val" : [0,-30000., 10000, 10000, 65500, 65500]}
         {"calibration_val" : [
-                0, -1.,
-            65500,  1.]
+  56725, -1.5,
+  17856, 0.0,
+  2112, 1.5
+            ]
         }
     ]
     

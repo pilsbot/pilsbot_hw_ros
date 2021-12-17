@@ -29,7 +29,7 @@ class NonBlockingConsole(object):
 
 
 class MinimalPublisher(Node):
-
+    # TOdo: start and measure dif-drive with odom
     def __init__(self):
         super().__init__('minimal_publisher')
         self.publisher_ = self.create_publisher(String, 'topic', 10)
@@ -38,20 +38,12 @@ class MinimalPublisher(Node):
         self.i = 0
 
     def timer_callback(self):
-        msg = String()
-        msg.data = 'Hello World: %d' % self.i
-        self.publisher_.publish(msg)
-        self.get_logger().info('Publishing: "%s"' % msg.data)
         self.i += 1
 
 
-
 class HeadMCUSub(Node):
-    endstop_l_angle_rad = -1
     endstop_l_raw = -1
-    endstop_r_angle_rad =  1
     endstop_r_raw = -1
-    
     current_raw = -1
     
     def __init__(self):
@@ -68,18 +60,17 @@ class HeadMCUSub(Node):
 
     def listener_callback(self, msg):
         self.current_raw = msg.sensors.steering_angle_raw
-        print("raw value:" + str(int(self.current_raw)), end="\r")
+        print("raw value: " + str(int(self.current_raw)) + " " +
+              "(old config: " +str(round(msg.sensors.steering_angle_normalized, 4)) +")", end="\r")
         if( not self.is_endstop_calibration_complete()):
             if(not msg.sensors.endstop_l):  #inverted
                 if(self.endstop_l_raw != self.current_raw):
                     self.endstop_l_raw = self.current_raw 
-                    self.get_logger().info("got left endstop: " +
-                        str(self.endstop_l_angle_rad)+", " + str(self.current_raw))
+                    self.get_logger().info("got left endstop: " + str(self.current_raw))
             if(not msg.sensors.endstop_r):  #inverted
                 if(self.endstop_r_raw != self.current_raw):
                     self.endstop_r_raw = self.current_raw
-                    self.get_logger().info("got right endstop: " +
-                        str(self.endstop_r_angle_rad)+", " + str(self.current_raw))
+                    self.get_logger().info("got right endstop: " + str(self.current_raw))
 
 def main(args=None):
     rclpy.init(args=args)
@@ -87,12 +78,16 @@ def main(args=None):
     headMCUsub = HeadMCUSub()
     
     # Note: This should be determined by external measurement
-    headMCUsub.endstop_l_angle_rad = -1.5
-    headMCUsub.endstop_r_angle_rad = 1.5
+    endstop_l_angle_rad = -1.5
+    endstop_r_angle_rad = 1.5
     
-    print("Assuming location of left endstop at " +str(headMCUsub.endstop_l_angle_rad) + " rad")
-    print("                    right endstop at " +str(headMCUsub.endstop_r_angle_rad) + " rad")
-    print("\nPlease move axle to both endstops manually.")
+    print("1.\tMake sure, that head_mcu_node is publishing /head_mcu/sensors/")
+    print("  \tduring reading, a 'raw value: [number]' should show.")
+    print()
+    print("2.\tAssuming location of left endstop at " +str(endstop_l_angle_rad) + " rad")
+    print("  \t                    right endstop at " +str(endstop_r_angle_rad) + " rad")
+    print()
+    print("Please move axle to both endstops manually now.")
 
     while( not headMCUsub.is_endstop_calibration_complete() ):
         #rclpy.spin_once(minimal_publisher)
@@ -119,9 +114,9 @@ def main(args=None):
     
     print("\nSuggested config:\n")
     print("{\"calibration_val\" : [")
-    print("  " + str(int(headMCUsub.endstop_l_raw)) + ", " + str(headMCUsub.endstop_l_angle_rad) + ",")
+    print("  " + str(int(headMCUsub.endstop_l_raw)) + ", " + str(endstop_l_angle_rad) + ",")
     print("  " + str(int(center_raw)) + ", 0.0,")
-    print("  " + str(int(headMCUsub.endstop_r_raw)) + ", " + str(headMCUsub.endstop_r_angle_rad)) # + ",")
+    print("  " + str(int(headMCUsub.endstop_r_raw)) + ", " + str(endstop_r_angle_rad)) # + ",")
     print("]}")
 
     headMCUsub.destroy_node()

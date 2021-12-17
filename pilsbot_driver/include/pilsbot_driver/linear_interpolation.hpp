@@ -11,7 +11,7 @@ namespace linear_interpolator {
 template<typename FROM, typename TO> class LinearInterpolator {
 public:
   struct Point {
-    FROM x; TO y;
+    double x; double y;
   };
 
   typedef std::vector<Point> CalibrationList;
@@ -32,15 +32,24 @@ public:
      } else {
        CalibrationList cal;
        for(unsigned i = 0; i < raw_cal.size(); i+=2) {
-         if(i >= 2 && raw_cal[i-2] >= raw_cal[i]) {
-           std::cerr <<  "Calibration X-values are not sorted and inequal!" << std::endl
-             << "Elem " << i-2 << " (" << raw_cal[i-2] << ") >= "
-                "Elem " << i << " (" << raw_cal[i] << ")" << std::endl;
-           return false;
-         }
-         //std::cout << "Pushing pair (" << raw_cal[i] << ":" << raw_cal[i+1] << ")" << std::endl;
+         std::cout << "Pushing pair (" << raw_cal[i] << ":" << raw_cal[i+1] << ")" << std::endl;
          cal.push_back({static_cast<FROM>(raw_cal[i]), raw_cal[i+1]});
        }
+       std::sort(cal.begin(), cal.end(),
+           [](const auto& lhs, const auto& rhs) {
+             return lhs.x < rhs.x;
+           });
+
+       //check sanity
+       for(unsigned i = 1; i < cal.size(); i++) {
+         if(cal[i].x == cal[i-1].x) {
+           std::cerr << "More than one Element with x=" << cal[i].x << std::endl;
+           return false;
+         }
+       }
+
+       for (const auto& point : cal)
+         std::cout << "(" << point.x << ", " << point.y << ")" << std::endl;
        cal_ = cal;
      }
      return true;
@@ -48,6 +57,8 @@ public:
 
   TO operator()(FROM from){
     Point low,high;
+    bool debug = false;
+    debug = true;
     if(from <= cal_.front().x) {
       if(from < cal_.front().x) {
         std::cout << "Warn: X val " << from << " is lower than calibration range "
@@ -68,11 +79,18 @@ public:
       auto lower_bound = std::partition_point(cal_.begin(), cal_.end(),
           [from](const auto& s) { return s.x < from; });
       low = *(lower_bound-1);
-      high = *lower_bound;
+      high = *(lower_bound);
     }
 
-    auto dx = (high.x - low.x);
-    auto dy = (high.y - low.y);
+    const auto dx = (high.x - low.x);
+    const auto dy = (high.y - low.y);
+    if(debug) {
+      std::cout << "choosing pair ("<<low.x<<","<<low.y<<") ("<<high.x<<","<<high.y<<")" << std::endl;
+      std::cout << "dx: (" << high.x << " - " << low.x << ") = " << dx << std::endl;
+      std::cout << "dy: (" << high.y << " - " << low.y << ") = " << dy << std::endl;
+      std::cout << "low.y + (X - low.x) * dy / dx = " << std::endl;
+      std::cout << low.y << " + ("<<from<<" - "<<low.x<<") * "<<dy / dx<<" = " <<low.y + (from - low.x) * dy / dx<< std::endl;
+    }
     return low.y + (from - low.x) * dy / dx;
   }
 };
