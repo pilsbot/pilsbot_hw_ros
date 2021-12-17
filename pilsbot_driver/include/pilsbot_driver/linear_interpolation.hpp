@@ -32,7 +32,6 @@ public:
      } else {
        CalibrationList cal;
        for(unsigned i = 0; i < raw_cal.size(); i+=2) {
-         std::cout << "Pushing pair (" << raw_cal[i] << ":" << raw_cal[i+1] << ")" << std::endl;
          cal.push_back({static_cast<FROM>(raw_cal[i]), raw_cal[i+1]});
        }
        std::sort(cal.begin(), cal.end(),
@@ -48,6 +47,7 @@ public:
          }
        }
 
+       std::cout << "[linear interpolation] Got Calibration Values:" << std::endl;
        for (const auto& point : cal)
          std::cout << "(" << point.x << ", " << point.y << ")" << std::endl;
        cal_ = cal;
@@ -57,8 +57,6 @@ public:
 
   TO operator()(FROM from){
     Point low,high;
-    bool debug = false;
-    debug = true;
     if(from <= cal_.front().x) {
       if(from < cal_.front().x) {
         std::cout << "Warn: X val " << from << " is lower than calibration range "
@@ -84,13 +82,6 @@ public:
 
     const auto dx = (high.x - low.x);
     const auto dy = (high.y - low.y);
-    if(debug) {
-      std::cout << "choosing pair ("<<low.x<<","<<low.y<<") ("<<high.x<<","<<high.y<<")" << std::endl;
-      std::cout << "dx: (" << high.x << " - " << low.x << ") = " << dx << std::endl;
-      std::cout << "dy: (" << high.y << " - " << low.y << ") = " << dy << std::endl;
-      std::cout << "low.y + (X - low.x) * dy / dx = " << std::endl;
-      std::cout << low.y << " + ("<<from<<" - "<<low.x<<") * "<<dy / dx<<" = " <<low.y + (from - low.x) * dy / dx<< std::endl;
-    }
     return low.y + (from - low.x) * dy / dx;
   }
 };
