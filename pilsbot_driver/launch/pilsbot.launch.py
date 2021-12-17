@@ -12,38 +12,78 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
-from ament_index_python.packages import get_package_share_directory
-
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 from launch_ros.actions import Node
-
-import xacro
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
 
-    # Get URDF via xacro
-    robot_description_path = os.path.join(
-        get_package_share_directory('pilsbot_description'),
-        'urdf', 'pilsbot.urdf.xacro')
-    robot_description_config = xacro.process_file(robot_description_path)
-    robot_description = {'robot_description': robot_description_config.toxml()}
+    declared_launch_args = []
 
-    pilsbot_acker_diff_controller_config = os.path.join(
-        get_package_share_directory('pilsbot_control'),
-        'config',
-        'acker_diff_controller.yaml'
-        )
+    declared_launch_args.append(DeclareLaunchArgument(
+        'controller_config', default_value=TextSubstitution(text='acker_diff_controller.yaml'),
+        description='The controller configuration you want to use.'))
+
+    declared_launch_args.append(DeclareLaunchArgument(
+        'runtime_config_package', default_value=TextSubstitution(text='pilsbot_control'),
+        description='Package with the controller\'s configuration in "config" folder. \
+        Usually the argument is not set, it enables use of a custom setup'))
+
+    declared_launch_args.append(DeclareLaunchArgument(
+        'descritption_file', default_value=TextSubstitution(text='pilsbot.urdf.xacro'),
+        description='URDF/XACRO description file with the robot.'))
+
+    declared_launch_args.append(DeclareLaunchArgument(
+        'description_package', default_value=TextSubstitution(text='pilsbot_description'),
+        description=' Description package with robot URDF/xacro files. Usually the argument \
+        is not set, it enables use of a custom description.'))
+
+    # intialise args
+    controller_config = LaunchConfiguration('controller_config')
+    runtime_config_package = LaunchConfiguration('runtime_config_package')
+    description_file = LaunchConfiguration('descritption_file')
+    description_package = LaunchConfiguration('description_package')
+
+    # Get URDF via xacro
+    robot_description_content = Command(
+        [
+            PathJoinSubstitution([FindExecutable(name="xacro")]),
+            " ",
+            PathJoinSubstitution(
+                [
+                    FindPackageShare(description_package),
+                    "urdf",
+                    description_file,
+                ]
+            ),
+            " ",
+            "controller_config:=",
+            controller_config,
+            " ",
+            "use_fake_hardware:=false",
+        ]
+    )
+
+    robot_description = {'robot_description': robot_description_content}
+
+    pilsbot_acker_diff_controller_config = PathJoinSubstitution(
+        [
+            FindPackageShare(runtime_config_package),
+            "config",
+            controller_config,
+        ]
+    )
 
     control_node = Node(
-      package='controller_manager',
-      executable='ros2_control_node',
-      parameters=[robot_description, pilsbot_acker_diff_controller_config],
-      output={
-          'stdout': 'screen',
-          'stderr': 'screen',
+        package='controller_manager',
+        executable='ros2_control_node',
+        parameters=[robot_description, pilsbot_acker_diff_controller_config],
+        output={
+            'stdout': 'screen',
+            'stderr': 'screen',
         },
     )
     robot_state_publisher_node = Node(
@@ -53,7 +93,6 @@ def generate_launch_description():
         parameters=[robot_description]
     )
 
-    return LaunchDescription([
-        control_node,
-        robot_state_publisher_node,
-    ])
+    nodes = [control_node, robot_state_publisher_node]
+
+    return LaunchDescription(declared_launch_args + nodes)
