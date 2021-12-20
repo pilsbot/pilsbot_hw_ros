@@ -9,7 +9,7 @@
 
 int serialWrite(unsigned char* data, int len)
 {
-  return (int)write(hoverboard_fd, data, len);
+  return ::write(hoverboard_fd, data, len);
 }
 
 namespace pilsbot_driver
@@ -62,7 +62,7 @@ PilsbotDriver::export_state_interfaces()
       state_interfaces.emplace_back(hardware_interface::StateInterface(
         joint.name, hardware_interface::HW_IF_VELOCITY, &wheels_[1].curr_speed));
     }
-    else if (joint.name == "steering_axle_joint") { // todo: Make this name configurable
+    else if (joint.name == "steering_axle_joint") { // TODO: Make this name configurable
       if(!have_single_steering_axle) {
         RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
              "StateIF: interpreting joint %s as steering_axle joint", joint.name.c_str());
@@ -183,7 +183,7 @@ hardware_interface::return_type PilsbotDriver::configure(const hardware_interfac
   else
   {
 
-    // todo check if correct joints are passed in config
+    // TODO: check if correct joints are passed in config
     wheels_.resize(2, WheelStatus());   // hardcoded: only support two controllable wheels
     hoverboard_sensors_ = HoverboardSensors();
 
@@ -353,6 +353,7 @@ hardware_interface::return_type PilsbotDriver::read()
       RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
           "hoverboard: Reading from serial %s failed: %d",
           params_.hoverboard.tty_device.c_str(), r);
+      perror("hoverboard read");
       return hardware_interface::return_type::ERROR;
     }
   }
@@ -360,8 +361,8 @@ hardware_interface::return_type PilsbotDriver::read()
   if ((clock.now() - last_read) > rclcpp::Duration(1, 0))
   {
     RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
-        "hoverboard: Timeout reading from serial %s failed",
-        params_.hoverboard.tty_device.c_str());
+        "hoverboard: Timeout reading from serial %s failed. Last connection: %d",
+        params_.hoverboard.tty_device.c_str(), last_read.seconds());
     return hardware_interface::return_type::ERROR;
   }
 
@@ -413,18 +414,6 @@ hardware_interface::return_type PilsbotDriver::write()
   return hardware_interface::return_type::OK;
 }
 
-// TODO: Update for ROS 2
-// void PilsbotDriver::update_diagnostics()
-// {
-//   current_status.values[0].value = std::to_string(api->getBatteryVoltage());
-
-//   if (diagnostics_pub->trylock())
-//   {
-//     diagnostics_pub->msg_= current_status;
-//     diagnostics_pub->unlockAndPublish();
-//   }
-// }
-
 void PilsbotDriver::tick()
 {
   api->protocolTick();
@@ -454,7 +443,7 @@ void PilsbotDriver::read_from_head_mcu() {
     } else if(ret > 0) {
       RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
           "Head_mcu: serial connection out of sync!");
-      // todo: maybe reopen serial, this resets the controller
+      // TODO: maybe reopen serial, this resets the controller
     } else {
       RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
           "Head_mcu: serial connection closed or something: %d", ret);
