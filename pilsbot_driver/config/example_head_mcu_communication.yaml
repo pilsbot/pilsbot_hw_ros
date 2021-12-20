@@ -1,7 +1,9 @@
  head_mcu_node:
         ros__parameters:
             serial_port: "/dev/ttyACM0"
-            publish_rate: 10
-            calibration_val: [    0, -1.,
-                              65500,  1.,
-                             ]
+            publish_rate: 100
+            calibration_val: [
+                  51393, -1.56601,
+                  32890, 0.0,
+                  15360, 1.56601
+             ]

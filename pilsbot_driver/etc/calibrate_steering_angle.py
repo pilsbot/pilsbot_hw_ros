@@ -63,11 +63,11 @@ class HeadMCUSub(Node):
         print("raw value: " + str(int(self.current_raw)) + " " +
               "(old config: " +str(round(msg.sensors.steering_angle_normalized, 4)) +")", end="\r")
         if( not self.is_endstop_calibration_complete()):
-            if(not msg.sensors.endstop_l):  #inverted
+            if(msg.sensors.endstop_l):  #not inverted
                 if(self.endstop_l_raw != self.current_raw):
                     self.endstop_l_raw = self.current_raw 
                     self.get_logger().info("got left endstop: " + str(self.current_raw))
-            if(not msg.sensors.endstop_r):  #inverted
+            if(msg.sensors.endstop_r):  #not inverted
                 if(self.endstop_r_raw != self.current_raw):
                     self.endstop_r_raw = self.current_raw
                     self.get_logger().info("got right endstop: " + str(self.current_raw))
@@ -78,8 +78,8 @@ def main(args=None):
     headMCUsub = HeadMCUSub()
     
     # Note: This should be determined by external measurement
-    endstop_l_angle_rad = -1.5
-    endstop_r_angle_rad = 1.5
+    endstop_l_angle_rad = -1.56601
+    endstop_r_angle_rad = 1.56601	# measured 20.12.2021 pp
     
     print("1.\tMake sure, that head_mcu_node is publishing /head_mcu/sensors/")
     print("  \tduring reading, a 'raw value: [number]' should show.")
