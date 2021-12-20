@@ -3,4 +3,4 @@
 	url = https://github.com/bipropellant/bipropellant-hoverboard-api.git
 [submodule "pilsbot_driver/src/head_mcu"]
 	path = pilsbot_driver/src/head_mcu
-	url = git@github.com:pilsbot/head_mcu.git
+	url = https://github.com/pilsbot/head_mcu.git
