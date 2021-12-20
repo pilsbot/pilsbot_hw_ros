@@ -261,6 +261,8 @@ hardware_interface::return_type PilsbotDriver::start()
   tcflush(hoverboard_fd, TCIFLUSH);
   tcsetattr(hoverboard_fd, TCSANOW, &options);
 
+  api = new HoverboardAPI(serialWrite);
+
   // Doesn't work for some reason. Need to investigate
   // api->scheduleRead(HoverboardAPI::Codes::sensHall, -1, 20, PROTOCOL_SOM_NOACK);
   // api->scheduleRead(HoverboardAPI::Codes::sensElectrical, -1, 20, PROTOCOL_SOM_NOACK);
