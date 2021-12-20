@@ -187,8 +187,11 @@ hardware_interface::return_type PilsbotDriver::configure(const hardware_interfac
     wheels_.resize(2, WheelStatus());   // hardcoded: only support two controllable wheels
     hoverboard_sensors_ = HoverboardSensors();
 
-    //todo: something with info_.hardware_parameters
-    // is this the only param possibility? Or also yaml-shit?
+    /*
+     * TODO: Load parameters from Hardware-Info (URDF)
+     * And for deep hardware params (serial port, baud, ...)
+     * load a yaml via rclcpp yaml-parser referenced in urdf
+     */
     params_ = Params();
 
     if(!interpolator_.deserialize(params_.head_mcu.calibration_val)) {
