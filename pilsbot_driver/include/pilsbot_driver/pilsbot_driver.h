@@ -69,10 +69,10 @@ private:
   };
 
   struct Params {
-    double wheel_radius = 0.0825;
+    double wheel_radius = 0.125;
     struct {
       std::string tty_device = "/dev/ttyHoverboard";
-      unsigned max_power = 100;   //limit is around 600, I think
+      unsigned max_power = 600;   //limit is around 600, I think
       unsigned min_speed = 40;    // Somehow convoluted with wheel_radius.
     } hoverboard;
     struct {
