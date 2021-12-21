@@ -15,6 +15,7 @@
   <build_depend>pilsbot_control</build_depend>
   <build_depend>pilsbot_driver_msgs</build_depend>
   <build_depend>pilsbot_driver</build_depend>
+  <exec_depend>acker_diff_controller</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
