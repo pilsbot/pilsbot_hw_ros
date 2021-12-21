@@ -93,6 +93,19 @@ def generate_launch_description():
         parameters=[robot_description]
     )
 
-    nodes = [control_node, robot_state_publisher_node]
+    spawn_pb_controller = Node(
+        package="controller_manager",
+        executable="spawner.py",
+        arguments=["pilsbot_velocity_controller"],
+        output="screen",
+    )
+    spawn_jsb_controller = Node(
+        package="controller_manager",
+        executable="spawner.py",
+        arguments=["pilsbot_joint_publisher"],
+        output="screen",
+    )
+
+    nodes = [spawn_pb_controller, spawn_jsb_controller, control_node, robot_state_publisher_node]
 
     return LaunchDescription(declared_launch_args + nodes)
