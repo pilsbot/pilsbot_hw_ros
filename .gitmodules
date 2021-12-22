@@ -4,3 +4,6 @@
 [submodule "pilsbot_driver/src/head_mcu"]
 	path = pilsbot_driver/src/head_mcu
 	url = https://github.com/pilsbot/head_mcu.git
+[submodule "pilsbot_driver/src/hoverboard-firmware"]
+	path = pilsbot_driver/src/hoverboard-firmware
+	url = https://github.com/pilsbot/bipropellant-hoverboard-firmware.git
