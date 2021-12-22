@@ -21,8 +21,10 @@ pilsbot_velocity_controller:
     # diff_drive_controller will attempt to read either one or both from the
     # URDF if not specified as a parameter
     # FIXME: Somehow this does not work anymore... Config von gazebo rausgenommen, glaube ich
+    # wheel left/right distance
     wheel_separation : 0.62
     wheel_radius : 0.125
+    #wheel front/back distance
     wheel_base_distance : 0.85
   
     # Wheel separation and radius multipliers
