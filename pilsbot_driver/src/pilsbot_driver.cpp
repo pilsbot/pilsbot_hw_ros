@@ -266,10 +266,13 @@ hardware_interface::return_type PilsbotDriver::start()
 
   api = new HoverboardAPI(serialWrite);
 
-  // Doesn't work for some reason. Need to investigate
-  // api->scheduleRead(HoverboardAPI::Codes::sensHall, -1, 20, PROTOCOL_SOM_NOACK);
-  // api->scheduleRead(HoverboardAPI::Codes::sensElectrical, -1, 20, PROTOCOL_SOM_NOACK);
+  // directly send configured PID values
+  api->sendPIDControl(params_.hoverboard.pid.speedKpx,
+      params_.hoverboard.pid.speedKix,
+      params_.hoverboard.pid.speedKdx,
+      params_.hoverboard.pid.speedPWMIncrementLimit);
 
+  api->protocolTick(); // sends queued messages
 
   // configuring head_mcu UART
   tcflush(head_mcu_fd, TCIOFLUSH); // flush previous bytes
@@ -330,32 +333,33 @@ hardware_interface::return_type PilsbotDriver::stop()
 
 hardware_interface::return_type PilsbotDriver::read()
 {
+
+  if (hoverboard_fd == -1) {
+    RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
+        "Filedescriptor to hoverboard invalid!");
+    return hardware_interface::return_type::ERROR;
+  }
   api->requestRead(HoverboardAPI::Codes::sensHall);
   api->requestRead(HoverboardAPI::Codes::sensElectrical);
+  api->protocolTick();
 
-  if (hoverboard_fd != -1)
+  unsigned char c;
+  int i = 0, r = 0;
+  while ((r = ::read(hoverboard_fd, &c, 1)) > 0 && i++ < max_length) {
+    api->protocolPush(c);
+  }
+
+  if (i > 0) {
+    last_read = clock.now();
+  }
+
+  if (r < 0 && errno != EAGAIN)
   {
-    unsigned char c;
-    int i = 0, r = 0;
-
-    while ((r = ::read(hoverboard_fd, &c, 1)) > 0 && i++ < max_length)
-    {
-      api->protocolPush(c);
-    }
-
-    if (i > 0)
-    {
-      last_read = clock.now();
-    }
-
-    if (r < 0 && errno != EAGAIN)
-    {
-      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-          "hoverboard: Reading from serial %s failed: %d",
-          params_.hoverboard.tty_device.c_str(), r);
-      perror("hoverboard read");
-      return hardware_interface::return_type::ERROR;
-    }
+    RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+        "hoverboard: Reading from serial %s failed: %d",
+        params_.hoverboard.tty_device.c_str(), r);
+    perror("hoverboard read");
+    return hardware_interface::return_type::ERROR;
   }
 
   if ((clock.now() - last_read) > rclcpp::Duration(1, 0))
@@ -381,8 +385,7 @@ hardware_interface::return_type PilsbotDriver::read()
   // Basic sanity check, speed should be less than 10 m/s
   // Sometimes, it seems during EMI peaks, we're getting ridiculous values here
   // Don't know what to do with it, just ignoring for now
-  if (fabs(sens_speed0) < 10000 && fabs(sens_speed1) < 10000)
-  {
+  if (fabs(sens_speed0) < 10000 && fabs(sens_speed1) < 10000) {
     wheels_[0].curr_speed = (sens_speed0 / 1000.0) / params_.wheel_radius;
     wheels_[0].curr_position = (api->getPosition0_mm() / 1000.0) / params_.wheel_radius;
     wheels_[1].curr_speed = (sens_speed1 / 1000.0) / params_.wheel_radius;
@@ -396,8 +399,7 @@ hardware_interface::return_type PilsbotDriver::read()
 
 hardware_interface::return_type PilsbotDriver::write()
 {
-  if (hoverboard_fd == -1)
-  {
+  if (hoverboard_fd == -1) {
     RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
         "hoverboard: Attempt to write on closed serial");
     return hardware_interface::return_type::ERROR;
@@ -409,11 +411,12 @@ hardware_interface::return_type PilsbotDriver::write()
 
   api->sendSpeedData(left_speed, right_speed, params_.hoverboard.max_power, params_.hoverboard.min_speed);
 
-  tick();
+  api->protocolTick();
 
   return hardware_interface::return_type::OK;
 }
 
+// TODO: call this with external, timed, thread
 void PilsbotDriver::tick()
 {
   api->protocolTick();

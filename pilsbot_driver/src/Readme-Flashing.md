@@ -1,7 +1,7 @@
 hoverboard-firmware
 -------------------
  - manually check out src/hbprotocol to master (sorry, ugly)
- - `pio run -e control_usart3 -t upload`
+ - `pio run -e pilsbot -t upload`
 
 head_mcu
 --------

@@ -72,15 +72,27 @@ private:
     double wheel_radius = 0.125;
     struct {
       std::string tty_device = "/dev/ttyHoverboard";
-      unsigned max_power = 600;   //limit is around 600, I think
-      unsigned min_speed = 40;    // Somehow convoluted with wheel_radius.
+      unsigned max_power = 600;   //"errors starting at 600" PWM 0-1000
+      unsigned min_speed = 0;    // mm/s        "does not work below 45" (main.c:598)
+      struct PIDValues {
+        /*  // Defaults taken from firmware default flash contents (main.c:156)
+        .SpeedKpx100 = 20,
+        .SpeedKix100 = 10,
+        .SpeedKdx100 = 0,
+        .SpeedPWMIncrementLimit = 20,
+        */
+        float speedKpx = 2000;      // times 100 in config set routine (main.c:229)
+        float speedKix =  100;
+        float speedKdx =    1;
+        float speedPWMIncrementLimit = 10;  // this is delta PWM per PID-Tick (50ms pid.c:23)
+      } pid;
     } hoverboard;
     struct {
       std::string tty_device = "/dev/ttyHeadMCU";
       unsigned baudrate = 115200;
       unsigned update_period_ms = 5;
-      // TODO: proper config loading
       CalibrationListSerialized calibration_val = {
+            // TODO: proper config loading
             51393, -1.56601,
             32890, 0.0,
             15360, 1.56601
