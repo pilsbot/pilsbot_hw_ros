@@ -35,6 +35,7 @@ add_library(pilsbot_driver
   src/hoverboard/src/protocolFunctions.c
   src/hoverboard/src/hbprotocol/ascii_protocol.c
   src/hoverboard/src/hbprotocol/protocol.c
+  src/hoverboard/src/hbprotocol/cobsr.c
   src/hoverboard/src/hbprotocol/machine_protocol.c)
 
 ament_target_dependencies(pilsbot_driver
