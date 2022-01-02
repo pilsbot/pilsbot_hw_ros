@@ -272,8 +272,6 @@ hardware_interface::return_type PilsbotDriver::start()
       params_.hoverboard.pid.speedKdx,
       params_.hoverboard.pid.speedPWMIncrementLimit);
 
-  api->protocolTick(); // sends queued messages
-
   // configuring head_mcu UART
   tcflush(head_mcu_fd, TCIOFLUSH); // flush previous bytes
 
