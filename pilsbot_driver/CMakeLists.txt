@@ -26,23 +26,33 @@ include_directories(
   src/hoverboard/src/hbprotocol
 )
 
-
-# hoverboard_driver
-add_library(pilsbot_driver
-  SHARED
-  src/pilsbot_driver.cpp
-  src/hoverboard/src/HoverboardAPI.cpp
+set (HB_SRC
   src/hoverboard/src/protocolFunctions.c
   src/hoverboard/src/hbprotocol/ascii_protocol.c
   src/hoverboard/src/hbprotocol/protocol.c
   src/hoverboard/src/hbprotocol/cobsr.c
-  src/hoverboard/src/hbprotocol/machine_protocol.c)
+  src/hoverboard/src/hbprotocol/machine_protocol.c
+  src/hoverboard/src/HoverboardAPI.cpp
+)
+
+# hoverboard_driver
+add_library(pilsbot_driver
+  SHARED
+  ${HB_SRC}
+  src/pilsbot_driver.cpp
+)
 
 ament_target_dependencies(pilsbot_driver
                           controller_manager #diagnostic_msgs
                           hardware_interface
                           rclcpp)
 
+# testing hoverboard API
+add_executable(hoverboard-api-testing
+  ${HB_SRC}
+  etc/hoverboard-api-testing.cpp
+)
+ament_target_dependencies(hoverboard-api-testing)
 
 # sensors
 add_executable(head_mcu_node
