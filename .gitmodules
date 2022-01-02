@@ -7,3 +7,9 @@
 [submodule "pilsbot_driver/src/hoverboard-firmware"]
 	path = pilsbot_driver/src/hoverboard-firmware
 	url = https://github.com/pilsbot/bipropellant-hoverboard-firmware.git
+[submodule "pilsbot_driver/src/pid-controller"]
+	path = pilsbot_driver/src/pid-controller
+	url = https://github.com/Cirromulus/minimal-PID-controller
+[submodule "pilsbot_driver/pid-controller"]
+	path = pilsbot_driver/pid-controller
+	url = https://github.com/Cirromulus/minimal-PID-controller

@@ -1,4 +1,5 @@
 #include "HoverboardAPI.h"
+#include "../src/pid-controller/pid.h"
 
 #include <string>
 #include <iostream>
@@ -7,6 +8,7 @@
 #include <unistd.h>
 #include <chrono>
 #include <thread>
+#include <math.h>
 
 
 using namespace std;
@@ -59,12 +61,8 @@ void setup_serial(string tty_device)
   tcsetattr(hoverboard_fd, TCSANOW, &options);
 }
 
-int main() {
-
-  setup_serial("/dev/ttyHoverboard");
-
-  auto api = new HoverboardAPI(serialWrite);
-
+void setSpeedTest(HoverboardAPI* api)
+{
   // directly send configured PID values
   api->sendPIDControl(200,
       1,
@@ -89,9 +87,65 @@ int main() {
 
     cout << "Voltage: " << api->getBatteryVoltage() << "V, Current Speeds: " << api->getSpeed0_mms() << "mm/s, " << api->getSpeed1_mms() << "mm/s\r";
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
   }
+}
 
+void pwmPIDTest(HoverboardAPI* api)
+{
+  PID left, right;
+  auto settings = PID::Settings {
+    .Kp = 1, .Ki = 0.5,  .Kd = 0.1,
+    .dt = 1, .max = 500, .min = NAN //500 is PWM (0-1000)
+  };
+
+  auto last_tick = std::chrono::system_clock::now();
+
+  double speed_l = 20;   //mm/s
+  double speed_r = 10;   //mm/s
+  std::chrono::duration<double> target_delta_t = 10ms;
+
+  while(1){
+    unsigned char c;
+    int i = 0, r = 0;
+    while ((r = ::read(hoverboard_fd, &c, 1)) > 0 && i++ < max_length) {
+      api->protocolPush(c);
+    }
+    auto now = std::chrono::system_clock::now();
+    std::chrono::duration<double> delta_t = now - last_tick;
+
+    if(delta_t >= target_delta_t) {
+
+      api->requestRead(HoverboardAPI::Codes::sensHall, PROTOCOL_SOM_NOACK);
+      api->requestRead(HoverboardAPI::Codes::sensElectrical, PROTOCOL_SOM_NOACK);
+
+      double actual_speed_l = api->getSpeed0_mms();
+      double actual_speed_r = api->getSpeed1_mms();
+
+      last_tick = now;
+      settings.dt = delta_t.count();
+
+      double set_pwm_l = left.calculate(speed_l, actual_speed_l, settings);
+      double set_pwm_r = right.calculate(speed_r, actual_speed_r, settings);
+
+      cout << "Delta t: " << delta_t.count() << "s " <<
+              "Speed l " << actual_speed_l << "mm/s (target " << speed_l << ", pwm " << set_pwm_l << ") "
+              "Speed r " << actual_speed_r << "mm/s (target " << speed_r << ", pwm " << set_pwm_l << ")\r";
+      api->sendDifferentialPWM(set_pwm_l, set_pwm_r, PROTOCOL_SOM_ACK);
+
+    }
+
+    api->protocolTick();
+  }
+}
+
+int main() {
+
+  setup_serial("/dev/ttyHoverboard");
+
+  auto api = new HoverboardAPI(serialWrite);
+
+  //setSpeedTest(api);
+  pwmPIDTest(api);
 
   if (hoverboard_fd != -1)
     close(hoverboard_fd);

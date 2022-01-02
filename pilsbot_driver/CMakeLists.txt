@@ -50,6 +50,7 @@ ament_target_dependencies(pilsbot_driver
 # testing hoverboard API
 add_executable(hoverboard-api-testing
   ${HB_SRC}
+  src/pid-controller/pid.cpp
   etc/hoverboard-api-testing.cpp
 )
 ament_target_dependencies(hoverboard-api-testing)
