@@ -61,22 +61,22 @@ void setup_serial(string tty_device)
 
 int main() {
 
-  setup_serial("/dev/ttyUSB0");
+  setup_serial("/dev/ttyHoverboard");
 
   auto api = new HoverboardAPI(serialWrite);
 
   // directly send configured PID values
-  api->sendPIDControl(2000,
-      0,
-      0,
+  api->sendPIDControl(200,
+      1,
+      1,
       10);
 
   double speedl = 50;   //mm/s
   double speedr = 50;   //mm/s
 
   while(1){
-    api->requestRead(HoverboardAPI::Codes::sensHall, PROTOCOL_SOM_NOACK);
-    api->requestRead(HoverboardAPI::Codes::sensElectrical, PROTOCOL_SOM_NOACK);
+    api->requestRead(HoverboardAPI::Codes::sensHall);
+    api->requestRead(HoverboardAPI::Codes::sensElectrical);
 
     unsigned char c;
     int i = 0, r = 0;
@@ -87,9 +87,9 @@ int main() {
     api->sendSpeedData(speedl, speedr, 600, 1);
     api->protocolTick();
 
+    cout << "Voltage: " << api->getBatteryVoltage() << "V, Current Speeds: " << api->getSpeed0_mms() << "mm/s, " << api->getSpeed1_mms() << "mm/s\r";
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    cout << "Current Speeds: " << api->getSpeed0_mms() << "mm/s, " << api->getSpeed1_mms() << "mm/s, ";
   }
 
 
