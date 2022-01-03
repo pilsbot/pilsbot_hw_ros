@@ -300,6 +300,9 @@ hardware_interface::return_type PilsbotDriver::start()
     perror("tcsetattr");
   }
 
+  last_serial_read = clock.now();
+  last_write_tick = clock.now();
+
   // ok, go on little bird
   stop_ = false;
   reading_function_ = std::thread(&PilsbotDriver::read_from_head_mcu, this);
@@ -355,7 +358,7 @@ hardware_interface::return_type PilsbotDriver::read()
 
   if ((clock.now() - last_serial_read) > rclcpp::Duration(1, 0))
   {
-    RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
+    RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
         "hoverboard: Timeout reading from serial %s. Last connection: %d",
         params_.hoverboard.tty_device.c_str(), last_serial_read.seconds());
     return hardware_interface::return_type::ERROR;

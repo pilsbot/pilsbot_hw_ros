@@ -74,9 +74,9 @@ private:
     struct {
       std::string tty_device = "/dev/ttyHoverboard";
       PID::Settings pid = PID::Settings {
-        .Kp = .25, .Ki = 1,  .Kd = .01,
+        .Kp = .25, .Ki = 1,  .Kd = .001,
         .dt = 1, .max = 600, .min = NAN, //min/max is PWM (0-2000)
-        .max_dv = 200
+        .max_dv = 500
       };
     } hoverboard;
     struct {
@@ -85,9 +85,9 @@ private:
       unsigned update_period_ms = 5;
       CalibrationListSerialized calibration_val = {
             // TODO: proper config loading
-            51393, -1.56601,
-            32890, 0.0,
-            15360, 1.56601
+            50300, -1.56601,
+            31615, 0.0,
+            14208, 1.56601
       };
     } head_mcu;
     unsigned serial_connect_retries = 30;
