@@ -20,8 +20,8 @@ int hoverboard_fd = -1;
 unsigned constexpr serial_connect_retries = 10;
 constexpr int max_length = 1024;
 
-double target_speed_l = 400;   //mm/s
-double target_speed_r = 60;   //mm/s
+double target_speed_l = 0;   //mm/s
+double target_speed_r = 0;   //mm/s
 
 int serialWrite(unsigned char* data, int len)
 {
@@ -68,7 +68,6 @@ void setup_serial(string tty_device)
 
 void setSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
 {
-
   if(!isnan(pid_settings.Kp)) {
     cout << "using provided PIDs" << endl;
     // directly send configured PID values
@@ -103,12 +102,14 @@ void setSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
   }
 }
 
+//i know, ugly, but this is only a test
+bool scheduleRead = false;
 void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
 {
   PID left, right;
   auto settings = PID::Settings {
-    .Kp = .15, .Ki = .5,  .Kd = .01,
-    .dt = 1, .max = 250, .min = NAN //500 is PWM (0-1000)
+    .Kp = .25, .Ki = 1,  .Kd = .01,
+    .dt = 1, .max = 300, .min = NAN //min/max is PWM (0-1000)
   };
   if(!isnan(pid_settings.Kp)) {
     cout << "Using provided PID values" << endl;
@@ -119,8 +120,12 @@ void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
 
   std::chrono::duration<double> target_delta_t = 50ms;
 
-  //TODO: Is "period" in ms?
-  api->scheduleRead(HoverboardAPI::Codes::sensHall, -1, target_delta_t.count()*(1000/2));
+  if(scheduleRead) {
+  //Period is in ms
+    unsigned period_ms = target_delta_t.count()*(1000/2);
+    cout << "Scheduling Hall info to read every " << period_ms << "ms" << endl;
+    api->scheduleRead(HoverboardAPI::Codes::sensHall, -1, period_ms); //, PROTOCOL_SOM_ACK);
+  }
 
   while(1){
     unsigned char c;
@@ -128,7 +133,6 @@ void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
     while ((r = ::read(hoverboard_fd, &c, 1)) > 0 && i++ < max_length) {
       api->protocolPush(c);
     }
-
 
     auto now = std::chrono::system_clock::now();
     std::chrono::duration<double> delta_t = now - last_tick;
@@ -144,10 +148,14 @@ void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
       int set_pwm_l = left.calculate(target_speed_l, actual_speed_l, settings);
       int set_pwm_r = right.calculate(target_speed_r, actual_speed_r, settings);
 
-      cout << "Delta t: " << setw(9) << delta_t.count() << "s " <<
-              "Speed l " << setw(8) << actual_speed_l << "mm/s (target " << target_speed_l << ", pwm " << setw(7) << set_pwm_l << ") "
-              "Speed r " << setw(8) << actual_speed_r << "mm/s (target " << target_speed_r << ", pwm " << setw(7) << set_pwm_l << ")\n";
+      cout << "Delta t: " << setw(9) << std::left << delta_t.count() << "s " << std::right <<
+              "Speed l " << setw(5) << actual_speed_l << "mm/s (target " << target_speed_l << ", pwm " << setw(4) << set_pwm_l << ") "
+              "Speed r " << setw(5) << actual_speed_r << "mm/s (target " << target_speed_r << ", pwm " << setw(4) << set_pwm_r << ")\n";
       api->sendDifferentialPWM(set_pwm_r, set_pwm_l, PROTOCOL_SOM_NOACK);   //!!!!
+
+      if(!scheduleRead) {
+        api->requestRead(HoverboardAPI::Codes::sensHall, PROTOCOL_SOM_NOACK);
+      }
     }
 
     api->protocolTick();
@@ -209,7 +217,7 @@ void pwmPIDPositionTest(HoverboardAPI* api, PID::Settings& pid_settings)
 
           cout << "Delta t: " << setw(9) << delta_t.count() << "s " <<
                   "Speed l " << setw(8) << actual_speed_l << "mm/s (target " << target_speed_l << ", pwm " << setw(7) << set_pwm_l << ") "
-                  "Speed r " << setw(8) << actual_speed_r << "mm/s (target " << target_speed_r << ", pwm " << setw(7) << set_pwm_l << ")\n";
+                  "Speed r " << setw(8) << actual_speed_r << "mm/s (target " << target_speed_r << ", pwm " << setw(7) << set_pwm_r << ")\n";
           api->sendDifferentialPWM(set_pwm_r, set_pwm_l, PROTOCOL_SOM_NOACK); //!!!!
 
           last_pos_mm_l = curr_pos_mm_l;
@@ -228,15 +236,22 @@ struct Args : MainArguments<Args> {
     std::string serial = option("port", 'p', "hoverbaord port") = "/dev/ttyHoverboard";
     std::string test = option("test", 't', "One of the tests") = "speed";
     vector<double> pid = option("pid", '\0', "PID values") = vector<double>{};
+    double speed_l = option("speed_l", 'l', "Speed L in mm/s") = 300;
+    double speed_r = option("speed_r", 'r', "Speed R in mm/s") = 100;
+    bool schedule = option("schedule", 's', "if to use scheduling or active polling") = false;
 };
 
 int main(int argc, char** argv) {
   Args args{{argc, argv}};
 
+  target_speed_l = args.speed_l;   //mm/s
+  target_speed_r = args.speed_r;   //mm/s
+  scheduleRead = args.schedule;
+
   setup_serial(args.serial);
   auto api = new HoverboardAPI(serialWrite);
 
-  PID::Settings pid_settings {NAN};
+  PID::Settings pid_settings = {NAN};
 
   if(args.pid.size() != 3) {
     cout << "No/wrong PID format: using test default PIDs" << endl;
