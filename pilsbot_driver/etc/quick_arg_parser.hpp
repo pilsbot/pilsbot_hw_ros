@@ -5,7 +5,7 @@
 #include <array>
 #include <unordered_map>
 
-#if __cplusplus > 201402L
+#if __cplusplus > 201703L
 #include <filesystem>
 #include <optional>
 #endif
@@ -213,7 +213,7 @@ struct ArgConverter<Optional<T>, void> {
 	constexpr static bool canDo = true;
 };
 
-#if __cplusplus > 201402L
+#if __cplusplus > 201703L
 template <>
 struct ArgConverter<std::filesystem::path, void> {
 	static std::filesystem::path makeDefault() {
