@@ -266,12 +266,6 @@ hardware_interface::return_type PilsbotDriver::start()
 
   api = new HoverboardAPI(serialWrite);
 
-  // directly send configured PID values
-  api->sendPIDControl(params_.hoverboard.pid.speedKpx,
-      params_.hoverboard.pid.speedKix,
-      params_.hoverboard.pid.speedKdx,
-      params_.hoverboard.pid.speedPWMIncrementLimit);
-
   // configuring head_mcu UART
   tcflush(head_mcu_fd, TCIOFLUSH); // flush previous bytes
 
@@ -339,7 +333,6 @@ hardware_interface::return_type PilsbotDriver::read()
   }
   api->requestRead(HoverboardAPI::Codes::sensHall);
   api->requestRead(HoverboardAPI::Codes::sensElectrical);
-  api->protocolTick();
 
   unsigned char c;
   int i = 0, r = 0;
@@ -348,7 +341,7 @@ hardware_interface::return_type PilsbotDriver::read()
   }
 
   if (i > 0) {
-    last_read = clock.now();
+    last_serial_read = clock.now();
   }
 
   if (r < 0 && errno != EAGAIN)
@@ -360,11 +353,11 @@ hardware_interface::return_type PilsbotDriver::read()
     return hardware_interface::return_type::ERROR;
   }
 
-  if ((clock.now() - last_read) > rclcpp::Duration(1, 0))
+  if ((clock.now() - last_serial_read) > rclcpp::Duration(1, 0))
   {
     RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
-        "hoverboard: Timeout reading from serial %s failed. Last connection: %d",
-        params_.hoverboard.tty_device.c_str(), last_read.seconds());
+        "hoverboard: Timeout reading from serial %s. Last connection: %d",
+        params_.hoverboard.tty_device.c_str(), last_serial_read.seconds());
     return hardware_interface::return_type::ERROR;
   }
 
@@ -376,17 +369,17 @@ hardware_interface::return_type PilsbotDriver::read()
   hoverboard_sensors_.avg_amperage_motor1 = api->getMotorAmpsAvg(1);
   hoverboard_sensors_.txBufferLevel = api->getTxBufferLevel();
 
-  // Convert m/s to rad/s
-  double sens_speed0 = api->getSpeed0_mms();
-  double sens_speed1 = api->getSpeed1_mms();
+  // Convert mm/s to rad/s
+  double sens_speed0 = (api->getSpeed0_mms() / 1000.0);
+  double sens_speed1 = (api->getSpeed1_mms() / 1000.0);
 
   // Basic sanity check, speed should be less than 10 m/s
   // Sometimes, it seems during EMI peaks, we're getting ridiculous values here
   // Don't know what to do with it, just ignoring for now
-  if (fabs(sens_speed0) < 10000 && fabs(sens_speed1) < 10000) {
-    wheels_[0].curr_speed = (sens_speed0 / 1000.0) / params_.wheel_radius;
+  if (fabs(sens_speed0) < 10 && fabs(sens_speed1) < 10) {
+    wheels_[0].curr_speed = sens_speed0 / params_.wheel_radius;
     wheels_[0].curr_position = (api->getPosition0_mm() / 1000.0) / params_.wheel_radius;
-    wheels_[1].curr_speed = (sens_speed1 / 1000.0) / params_.wheel_radius;
+    wheels_[1].curr_speed = sens_speed1 / params_.wheel_radius;
     wheels_[1].curr_position = (api->getPosition1_mm() / 1000.0) / params_.wheel_radius;
     return hardware_interface::return_type::OK;
   }
@@ -403,13 +396,26 @@ hardware_interface::return_type PilsbotDriver::write()
     return hardware_interface::return_type::ERROR;
   }
 
-  // Convert rad/s to m/s
-  double left_speed = wheels_[0].commanded_turning_rate * params_.wheel_radius;
-  double right_speed = wheels_[1].commanded_turning_rate * params_.wheel_radius;
+  auto& pid_settings = params_.hoverboard.pid;
 
-  api->sendSpeedData(left_speed, right_speed, params_.hoverboard.max_power, params_.hoverboard.min_speed);
+  auto delta_t = clock.now() - last_write_tick;
+  pid_settings.dt = delta_t.seconds();
+
+  // Convert rad/s to mm/s
+  double target_speed_l = wheels_[0].commanded_turning_rate * params_.wheel_radius * 1000;
+  double target_speed_r = wheels_[1].commanded_turning_rate * params_.wheel_radius * 1000;
+
+  double actual_speed_l = api->getSpeed0_mms();
+  double actual_speed_r = api->getSpeed1_mms();
+
+  int set_pwm_l = wheel_controller_l.calculate(target_speed_l, actual_speed_l, pid_settings);
+  int set_pwm_r = wheel_controller_r.calculate(target_speed_r, actual_speed_r, pid_settings);
+
+  // note l and r are switched!!!!
+  api->sendDifferentialPWM(set_pwm_r, set_pwm_l, PROTOCOL_SOM_NOACK);
 
   api->protocolTick();
+  last_write_tick = clock.now();
 
   return hardware_interface::return_type::OK;
 }

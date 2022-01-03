@@ -10,7 +10,7 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
 endif()
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra) # -Wpedantic) #lol designated inicializers are better yo
 endif()
 
 find_package(ament_cmake REQUIRED)
@@ -22,6 +22,7 @@ find_package(pilsbot_driver_msgs REQUIRED)
 
 include_directories(
   include
+  src/pid-controller
   src/hoverboard/src
   src/hoverboard/src/hbprotocol
 )
@@ -39,6 +40,7 @@ set (HB_SRC
 add_library(pilsbot_driver
   SHARED
   ${HB_SRC}
+  src/pid-controller/pid.cpp
   src/pilsbot_driver.cpp
 )
 

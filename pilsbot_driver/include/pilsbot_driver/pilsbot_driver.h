@@ -1,5 +1,6 @@
 #pragma once
 
+#include "pid.h"
 #include <chrono>
 
 #include "hardware_interface/base_interface.hpp"
@@ -72,20 +73,11 @@ private:
     double wheel_radius = 0.125;
     struct {
       std::string tty_device = "/dev/ttyHoverboard";
-      unsigned max_power = 600;   //"errors starting at 600" PWM 0-1000
-      unsigned min_speed = 0;    // mm/s        "does not work below 45" (main.c:598)
-      struct PIDValues {
-        /*  // Defaults taken from firmware default flash contents (main.c:156)
-        .SpeedKpx100 = 20,
-        .SpeedKix100 = 10,
-        .SpeedKdx100 = 0,
-        .SpeedPWMIncrementLimit = 20,
-        */
-        float speedKpx = 2000;      // times 100 in config set routine (main.c:229)
-        float speedKix =  100;
-        float speedKdx =    1;
-        float speedPWMIncrementLimit = 10;  // this is delta PWM per PID-Tick (50ms pid.c:23)
-      } pid;
+      PID::Settings pid = PID::Settings {
+        .Kp = .25, .Ki = 1,  .Kd = .01,
+        .dt = 1, .max = 600, .min = NAN, //min/max is PWM (0-2000)
+        .max_dv = 200
+      };
     } hoverboard;
     struct {
       std::string tty_device = "/dev/ttyHeadMCU";
@@ -106,6 +98,8 @@ private:
   int head_mcu_fd = -1;
 
   std::vector<WheelStatus> wheels_;
+  PID wheel_controller_l;
+  PID wheel_controller_r;
   HoverboardSensors hoverboard_sensors_;
 
   // head_mcu threading
@@ -116,7 +110,8 @@ private:
 
   rclcpp::Clock clock;
 
-  rclcpp::Time last_read;
+  rclcpp::Time last_serial_read;   // last time read from serial
+  rclcpp::Time last_write_tick;  // last time a 'write' tick happened
   HoverboardAPI *api;
 };
 

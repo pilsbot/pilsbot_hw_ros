@@ -253,7 +253,7 @@ int main(int argc, char** argv) {
   setup_serial(args.serial);
   auto api = new HoverboardAPI(serialWrite);
 
-  PID::Settings pid_settings = {NAN};
+  PID::Settings pid_settings; pid_settings.Kd = NAN;
 
   if(args.pid.size() != 3) {
     cout << "No/wrong PID format: using test default PIDs" << endl;
