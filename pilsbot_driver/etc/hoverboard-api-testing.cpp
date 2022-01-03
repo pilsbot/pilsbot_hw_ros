@@ -110,7 +110,7 @@ void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
   auto settings = PID::Settings {
     .Kp = .25, .Ki = 1,  .Kd = .01,
     .dt = 1, .max = 300, .min = NAN, //min/max is PWM (0-1000)
-    .max_dv = 50
+    .max_dv = 200
   };
   if(!isnan(pid_settings.Kp)) {
     cout << "Using provided PID values" << endl;
@@ -169,7 +169,7 @@ void pwmPIDPositionTest(HoverboardAPI* api, PID::Settings& pid_settings)
   auto settings = PID::Settings {
     .Kp = .15, .Ki = .5,  .Kd = .01,
     .dt = 1, .max = 250, .min = NAN, //500 is PWM (0-1000)
-    .max_dv = 10    // strongly dampening due to twitchy speed readout
+    .max_dv = 50    // strongly dampening due to twitchy speed readout
   };
   if(!isnan(pid_settings.Kp)) {
     cout << "Using provided PID values" << endl;
