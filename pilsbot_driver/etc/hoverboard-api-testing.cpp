@@ -109,7 +109,8 @@ void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
   PID left, right;
   auto settings = PID::Settings {
     .Kp = .25, .Ki = 1,  .Kd = .01,
-    .dt = 1, .max = 300, .min = NAN //min/max is PWM (0-1000)
+    .dt = 1, .max = 300, .min = NAN, //min/max is PWM (0-1000)
+    .max_dv = 50
   };
   if(!isnan(pid_settings.Kp)) {
     cout << "Using provided PID values" << endl;
@@ -167,7 +168,8 @@ void pwmPIDPositionTest(HoverboardAPI* api, PID::Settings& pid_settings)
   PID left, right;
   auto settings = PID::Settings {
     .Kp = .15, .Ki = .5,  .Kd = .01,
-    .dt = 1, .max = 250, .min = NAN //500 is PWM (0-1000)
+    .dt = 1, .max = 250, .min = NAN, //500 is PWM (0-1000)
+    .max_dv = 10    // strongly dampening due to twitchy speed readout
   };
   if(!isnan(pid_settings.Kp)) {
     cout << "Using provided PID values" << endl;
@@ -235,7 +237,7 @@ void pwmPIDPositionTest(HoverboardAPI* api, PID::Settings& pid_settings)
 struct Args : MainArguments<Args> {
     std::string serial = option("port", 'p', "hoverbaord port") = "/dev/ttyHoverboard";
     std::string test = option("test", 't', "One of the tests") = "speed";
-    vector<double> pid = option("pid", '\0', "PID values") = vector<double>{};
+    vector<double> pid = option("pid", '\0', "PID values 1,2,3") = vector<double>{};
     double speed_l = option("speed_l", 'l', "Speed L in mm/s") = 300;
     double speed_r = option("speed_r", 'r', "Speed R in mm/s") = 100;
     bool schedule = option("schedule", 's', "if to use scheduling or active polling") = false;
@@ -258,7 +260,8 @@ int main(int argc, char** argv) {
   } else {
     pid_settings = PID::Settings {
         .Kp = args.pid[0], .Ki = args.pid[1],  .Kd = args.pid[2],
-        .dt = 1, .max = 250, .min = NAN //500 is PWM (0-1000)
+        .dt = 1, .max = 250, .min = NAN, //500 is PWM (0-1000)
+        .max_dv = 50
     };
   }
 
