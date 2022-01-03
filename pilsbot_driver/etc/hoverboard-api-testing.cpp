@@ -119,27 +119,24 @@ void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
 
   std::chrono::duration<double> target_delta_t = 50ms;
 
-  bool has_requested_this_round = false;
+  //TODO: Is "period" in ms?
+  api->scheduleRead(HoverboardAPI::Codes::sensHall, -1, target_delta_t.count()*(1000/2));
+
   while(1){
     unsigned char c;
     int i = 0, r = 0;
     while ((r = ::read(hoverboard_fd, &c, 1)) > 0 && i++ < max_length) {
       api->protocolPush(c);
     }
+
+
     auto now = std::chrono::system_clock::now();
     std::chrono::duration<double> delta_t = now - last_tick;
 
-    if(!has_requested_this_round && delta_t >= target_delta_t/2)
-    {
-      api->requestRead(HoverboardAPI::Codes::sensHall, PROTOCOL_SOM_NOACK);
-      //api->requestRead(HoverboardAPI::Codes::sensElectrical, PROTOCOL_SOM_NOACK);
-      has_requested_this_round = true;
-    }
-
     if(delta_t >= target_delta_t) {
 
-      double actual_speed_l = api->getSpeed1_mms(); //!!!!
-      double actual_speed_r = api->getSpeed0_mms();
+      double actual_speed_l = api->getSpeed0_mms();
+      double actual_speed_r = api->getSpeed1_mms();
 
       last_tick = now;
       settings.dt = delta_t.count();
@@ -150,9 +147,7 @@ void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
       cout << "Delta t: " << setw(9) << delta_t.count() << "s " <<
               "Speed l " << setw(8) << actual_speed_l << "mm/s (target " << target_speed_l << ", pwm " << setw(7) << set_pwm_l << ") "
               "Speed r " << setw(8) << actual_speed_r << "mm/s (target " << target_speed_r << ", pwm " << setw(7) << set_pwm_l << ")\n";
-      api->sendDifferentialPWM(set_pwm_l, set_pwm_r, PROTOCOL_SOM_NOACK);
-
-      has_requested_this_round = false;
+      api->sendDifferentialPWM(set_pwm_r, set_pwm_l, PROTOCOL_SOM_NOACK);   //!!!!
     }
 
     api->protocolTick();
@@ -231,7 +226,7 @@ void pwmPIDPositionTest(HoverboardAPI* api, PID::Settings& pid_settings)
 
 struct Args : MainArguments<Args> {
     std::string serial = option("port", 'p', "hoverbaord port") = "/dev/ttyHoverboard";
-    std::string test = option("test", 't', "One of the tests") = "position";
+    std::string test = option("test", 't', "One of the tests") = "speed";
     vector<double> pid = option("pid", '\0', "PID values") = vector<double>{};
 };
 
