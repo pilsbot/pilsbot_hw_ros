@@ -3,6 +3,7 @@
 
 #include <string>
 #include <iostream>
+#include <iomanip>
 #include <fcntl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -69,8 +70,8 @@ void setSpeedTest(HoverboardAPI* api)
       1,
       10);
 
-  double speedl = 50;   //mm/s
-  double speedr = 50;   //mm/s
+  double speedl = 500;   //mm/s
+  double speedr = 200;   //mm/s
 
   while(1){
     api->requestRead(HoverboardAPI::Codes::sensHall);
@@ -94,16 +95,17 @@ void pwmPIDTest(HoverboardAPI* api)
 {
   PID left, right;
   auto settings = PID::Settings {
-    .Kp = 1, .Ki = 0.5,  .Kd = 0.1,
-    .dt = 1, .max = 500, .min = NAN //500 is PWM (0-1000)
+    .Kp = .15, .Ki = .5,  .Kd = .01,
+    .dt = 1, .max = 250, .min = NAN //500 is PWM (0-1000)
   };
 
   auto last_tick = std::chrono::system_clock::now();
 
-  double speed_l = 20;   //mm/s
-  double speed_r = 10;   //mm/s
-  std::chrono::duration<double> target_delta_t = 10ms;
+  double speed_l = 400;   //mm/s
+  double speed_r = 60;   //mm/s
+  std::chrono::duration<double> target_delta_t = 50ms;
 
+  bool has_requested_this_round = false;
   while(1){
     unsigned char c;
     int i = 0, r = 0;
@@ -113,13 +115,17 @@ void pwmPIDTest(HoverboardAPI* api)
     auto now = std::chrono::system_clock::now();
     std::chrono::duration<double> delta_t = now - last_tick;
 
+    if(!has_requested_this_round && delta_t >= target_delta_t/2)
+    {
+      api->requestRead(HoverboardAPI::Codes::sensHall, PROTOCOL_SOM_NOACK);
+      //api->requestRead(HoverboardAPI::Codes::sensElectrical, PROTOCOL_SOM_NOACK);
+      has_requested_this_round = true;
+    }
+
     if(delta_t >= target_delta_t) {
 
-      api->requestRead(HoverboardAPI::Codes::sensHall, PROTOCOL_SOM_NOACK);
-      api->requestRead(HoverboardAPI::Codes::sensElectrical, PROTOCOL_SOM_NOACK);
-
-      double actual_speed_l = api->getSpeed0_mms();
-      double actual_speed_r = api->getSpeed1_mms();
+      double actual_speed_l = api->getSpeed1_mms();
+      double actual_speed_r = api->getSpeed0_mms();
 
       last_tick = now;
       settings.dt = delta_t.count();
@@ -127,11 +133,12 @@ void pwmPIDTest(HoverboardAPI* api)
       double set_pwm_l = left.calculate(speed_l, actual_speed_l, settings);
       double set_pwm_r = right.calculate(speed_r, actual_speed_r, settings);
 
-      cout << "Delta t: " << delta_t.count() << "s " <<
-              "Speed l " << actual_speed_l << "mm/s (target " << speed_l << ", pwm " << set_pwm_l << ") "
-              "Speed r " << actual_speed_r << "mm/s (target " << speed_r << ", pwm " << set_pwm_l << ")\r";
-      api->sendDifferentialPWM(set_pwm_l, set_pwm_r, PROTOCOL_SOM_ACK);
+      cout << "Delta t: " << setw(8) << delta_t.count() << "s " <<
+              "Speed l " << actual_speed_l << "mm/s (target " << speed_l << ", pwm " << setw(7) << set_pwm_l << ") "
+              "Speed r " << actual_speed_r << "mm/s (target " << speed_r << ", pwm " << setw(7) << set_pwm_l << ")\n";
+      api->sendDifferentialPWM(set_pwm_l, set_pwm_r, PROTOCOL_SOM_NOACK);
 
+      has_requested_this_round = false;
     }
 
     api->protocolTick();
