@@ -1,0 +1,5 @@
+pilsbot_sensor_broadcaster:
+  ros__parameters:
+    hoverboard_api_publish_target: '/hoverboard_api'
+    head_mcu_publish_target: '/head_mcu'
+    steering_axle_name : 'steering_axle_joint'

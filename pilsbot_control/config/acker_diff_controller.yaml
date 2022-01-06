@@ -5,6 +5,9 @@ controller_manager:
     pilsbot_joint_publisher:
       type: joint_state_broadcaster/JointStateBroadcaster
 
+    pilsbot_sensor_broadcaster:
+      type: pilsbot_sensor_broadcaster/PilsbotSensorBroadcaster
+
     pilsbot_velocity_controller:
       type: acker_diff_controller/AckerDiffController
 

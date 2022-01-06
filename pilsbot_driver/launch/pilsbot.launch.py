@@ -86,6 +86,7 @@ def generate_launch_description():
             'stderr': 'screen',
         },
     )
+
     robot_state_publisher_node = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -106,6 +107,14 @@ def generate_launch_description():
         output="screen",
     )
 
-    nodes = [spawn_pb_controller, spawn_jsb_controller, control_node, robot_state_publisher_node]
+    spawn_ss_publisher_node = Node(
+        package="controller_manager",
+        executable="spawner.py",
+        arguments=['pilsbot_sensor_broadcaster'],
+        output="screen",
+    )
+
+    nodes = [spawn_pb_controller, spawn_jsb_controller, spawn_ss_publisher_node,
+        control_node, robot_state_publisher_node]
 
     return LaunchDescription(declared_launch_args + nodes)
