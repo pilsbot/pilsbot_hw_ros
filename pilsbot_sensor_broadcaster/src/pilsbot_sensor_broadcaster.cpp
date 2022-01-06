@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * Authors: Subhas Das, Denis Stogl
+ * Authors: Pascal Pieper
  */
 
 #include "pilsbot_sensor_broadcaster/pilsbot_sensor_broadcaster.hpp"
@@ -304,10 +304,10 @@ CallbackReturn PilsbotSensorBroadcaster::configure_head_mcu_sensors(
 }
 
 
-}  // namespace force_torque_sensor_broadcaster
+}  // namespace pilsbot_sensor_broadcaster
 
-#include "pluginlib/class_list_macros.hpp"
+#include "class_loader/register_macro.hpp"
 
-PLUGINLIB_EXPORT_CLASS(
+CLASS_LOADER_REGISTER_CLASS(
   pilsbot_sensor_broadcaster::PilsbotSensorBroadcaster,
   controller_interface::ControllerInterface)

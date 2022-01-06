@@ -16,7 +16,6 @@
   <depend>rclcpp_lifecycle</depend>
 
   <build_depend>pluginlib</build_depend>
-  
   <depend>controller_manager</depend>
 
   <test_depend>ament_lint_auto</test_depend>
