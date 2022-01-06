@@ -90,7 +90,7 @@ private:
             14208, 1.56601
       };
     } head_mcu;
-    unsigned serial_connect_retries = 30;
+    unsigned serial_connect_retries = 3;
                                 // Minimum calculated speed to have the wheels moving.
   } params_;
 

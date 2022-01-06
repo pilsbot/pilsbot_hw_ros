@@ -330,7 +330,7 @@ hardware_interface::return_type PilsbotDriver::read()
 {
 
   if (hoverboard_fd == -1) {
-    RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
+    RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
         "Filedescriptor to hoverboard invalid!");
     return hardware_interface::return_type::ERROR;
   }
@@ -349,7 +349,7 @@ hardware_interface::return_type PilsbotDriver::read()
 
   if (r < 0 && errno != EAGAIN)
   {
-    RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+    RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
         "hoverboard: Reading from serial %s failed: %d",
         params_.hoverboard.tty_device.c_str(), r);
     perror("hoverboard read");
@@ -394,7 +394,7 @@ hardware_interface::return_type PilsbotDriver::read()
 hardware_interface::return_type PilsbotDriver::write()
 {
   if (hoverboard_fd == -1) {
-    RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+    RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
         "hoverboard: Attempt to write on closed serial");
     return hardware_interface::return_type::ERROR;
   }
