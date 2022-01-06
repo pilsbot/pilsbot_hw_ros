@@ -1,0 +1,5 @@
+<library path="pilsbot_sensor_broadcaster">
+  <class name="pilsbot_sensor_broadcaster/PilsbotSensorBroadcaster" type="pilsbot_sensor_broadcaster::PilsbotSensorBroadcaster" base_class_type="controller_interface::ControllerInterface">
+  <description>lol</description>
+  </class>
+</library>

@@ -3,11 +3,11 @@ project(pilsbot_sensor_broadcaster)
 
 # Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 20)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra)
 endif()
 
 # find dependencies
@@ -36,9 +36,18 @@ ament_target_dependencies(pilsbot_sensor_broadcaster
   pilsbot_driver_msgs
 )
 
+# Causes the visibility macros to use dllexport rather than dllimport,
+# which is appropriate when building the dll but not consuming it.
+target_compile_definitions(pilsbot_sensor_broadcaster PRIVATE "pilsbot_sensor_broadcaster_BUILDING_DLL")
+# prevent pluginlib from using boost
+target_compile_definitions(pilsbot_sensor_broadcaster PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
+pluginlib_export_plugin_description_file(controller_interface psb_plugin.xml)
 
 install(TARGETS pilsbot_sensor_broadcaster
-  DESTINATION lib/${PROJECT_NAME})
+  RUNTIME DESTINATION bin
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -50,5 +59,9 @@ if(BUILD_TESTING)
   #set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+ament_export_libraries(
+  pilsbot_sensor_broadcaster
+)
 
 ament_package()
