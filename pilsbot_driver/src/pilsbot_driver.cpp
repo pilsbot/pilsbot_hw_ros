@@ -18,6 +18,7 @@ using std::placeholders::_1;
 
 PilsbotDriver::~PilsbotDriver()
 {
+  stop();
   delete api;
 }
 

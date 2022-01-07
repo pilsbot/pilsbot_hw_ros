@@ -43,7 +43,6 @@ public:
   std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
   std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
 
-  void update_diagnostics();
   void tick();
   void read_from_head_mcu();
 
