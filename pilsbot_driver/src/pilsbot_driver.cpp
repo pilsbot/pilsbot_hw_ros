@@ -354,6 +354,9 @@ hardware_interface::return_type PilsbotDriver::read()
         "hoverboard: Reading from serial %s failed: %d",
         params_.hoverboard.tty_device.c_str(), r);
     perror("hoverboard read");
+
+    //TODO: Is there a better way for controller to know this return value (ERROR)?
+    axle_sensors_.steering_angle_normalized = NAN;
     return hardware_interface::return_type::ERROR;
   }
 
@@ -362,6 +365,8 @@ hardware_interface::return_type PilsbotDriver::read()
     RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
         "hoverboard: Timeout reading from serial %s. Last connection: %d",
         params_.hoverboard.tty_device.c_str(), last_serial_read.seconds());
+    //TODO: Is there a better way for controller to know this return value (ERROR)?
+    axle_sensors_.steering_angle_normalized = NAN;
     return hardware_interface::return_type::ERROR;
   }
 
