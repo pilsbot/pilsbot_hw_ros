@@ -80,7 +80,9 @@ def generate_launch_description():
     control_node = Node(
         package='controller_manager',
         executable='ros2_control_node',
-        parameters=[robot_description, pilsbot_acker_diff_controller_config],
+        parameters=[robot_description,
+                    pilsbot_acker_diff_controller_config,
+                    ],
         output={
             'stdout': 'screen',
             'stderr': 'screen',
@@ -107,14 +109,15 @@ def generate_launch_description():
         output="screen",
     )
 
-    spawn_ss_publisher_node = Node(
+    spawn_ss_publisher_controller = Node(
         package="controller_manager",
         executable="spawner.py",
         arguments=['pilsbot_sensor_broadcaster'],
         output="screen",
     )
 
-    nodes = [spawn_pb_controller, spawn_jsb_controller, spawn_ss_publisher_node,
-        control_node, robot_state_publisher_node]
+    nodes = [control_node, 
+        spawn_pb_controller, spawn_jsb_controller, spawn_ss_publisher_controller,
+        robot_state_publisher_node]
 
     return LaunchDescription(declared_launch_args + nodes)
