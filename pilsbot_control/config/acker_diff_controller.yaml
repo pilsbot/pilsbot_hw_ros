@@ -69,3 +69,9 @@ pilsbot_velocity_controller:
     angular.z.has_acceleration_limits: true
     angular.z.max_acceleration       : 1.5  # rad/s^2
     angular.z.has_jerk_limits        : false
+
+pilsbot_sensor_broadcaster:
+  ros__parameters:
+    hoverboard_api_publish_target: '/hoverboard_api'
+    head_mcu_publish_target: '/head_mcu'
+    steering_axle_name : 'steering_axle_joint'
