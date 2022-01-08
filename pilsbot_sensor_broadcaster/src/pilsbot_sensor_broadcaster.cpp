@@ -142,13 +142,15 @@ CallbackReturn PilsbotSensorBroadcaster::on_activate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
   if(!hmcu_publish_target_.empty() &&
-      configure_hoverboard_api_sensors(registered_hoverboard_sensors_) != CallbackReturn::SUCCESS)
+      configure_head_mcu_sensors(registered_head_mcu_sensors_) != CallbackReturn::SUCCESS)
   {
+    head_mcu_publisher_ = nullptr;
     return CallbackReturn::ERROR;
   }
   if(!hbapi_publish_target_.empty() &&
       configure_hoverboard_api_sensors(registered_hoverboard_sensors_) != CallbackReturn::SUCCESS)
   {
+    hoverboard_api_publisher_ = nullptr;
     return CallbackReturn::ERROR;
   }
 
