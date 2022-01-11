@@ -24,6 +24,9 @@ RUN cd src && \
   git clone -b ros2 https://github.com/ros-drivers/ackermann_msgs.git && \
   git clone -b ros2 https://github.com/ros/xacro.git && \
   git clone -b ${ROS_DISTRO} https://github.com/ros-controls/ros2_control.git && \
+  git clone -b ${ROS_DISTRO} https://github.com/ros2/teleop_twist_joy && \
+  git clone -b ${ROS_DISTRO} https://github.com/ros/diagnostics && \
+  git clone -b ros2 https://github.com/ros-drivers/joystick_drivers && \
   # remove for now
   # git clone -b ${ROS_DISTRO} https://github.com/ros-controls/ros2_controllers.git && \
   git clone -b ${ROS_DISTRO}-devel https://github.com/ros-controls/control_msgs.git && \
