@@ -34,9 +34,9 @@ pilsbot_velocity_controller:
     wheel_separation_multiplier: 1.0 # default: 1.0
     wheel_radius_multiplier    : 1.0 # default: 1.0
     
-    pid.Kp : 3.
-    pid.Ki : .5
-    pid.Kd : 1.
+    pid.Kp : 1.
+    pid.Ki : .01
+    pid.Kd : .009
   
     # Velocity commands timeout [s], default 0.5
     cmd_vel_timeout: 0.5
