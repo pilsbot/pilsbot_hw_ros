@@ -84,9 +84,9 @@ private:
       unsigned update_period_ms = 5;
       CalibrationListSerialized calibration_val = {
             // TODO: proper config loading
-            50387, -1.56601,
-            32700, 0.0,
-            13963, 1.56601
+            50601, -1.56601,
+            32432, 0.0,
+            14142, 1.56601
       };
     } head_mcu;
     unsigned serial_connect_retries = 3;
