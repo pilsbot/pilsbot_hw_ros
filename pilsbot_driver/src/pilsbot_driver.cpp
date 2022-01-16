@@ -417,6 +417,13 @@ hardware_interface::return_type PilsbotDriver::write()
   double actual_speed_l = api->getSpeed0_mms();
   double actual_speed_r = api->getSpeed1_mms();
 
+  if(axle_sensors_.endstop_l || axle_sensors_.endstop_r) {
+        RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
+        "Hit Endstop! If this happens frequently, consider stop doing that.");
+    wheel_controller_l = PID();
+    wheel_controller_r = PID();
+  }
+
   int set_pwm_l = wheel_controller_l.calculate(target_speed_l, actual_speed_l, pid_settings);
   int set_pwm_r = wheel_controller_r.calculate(target_speed_r, actual_speed_r, pid_settings);
 
