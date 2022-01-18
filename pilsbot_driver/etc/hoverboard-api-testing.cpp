@@ -107,11 +107,11 @@ bool scheduleRead = false;
 void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
 {
   PID left, right;
-  auto settings = PID::Settings {
-    .Kp = .25, .Ki = 1,  .Kd = .01,
-    .dt = 1, .max = 300, .min = NAN, //min/max is PWM (0-1000)
-    .max_dv = 200
-  };
+  auto settings = PID::getDefault();
+  settings.Kp = .25; settings.Ki = 1; settings.Kd = .01;
+  settings.max = 300; //min/max is PWM (0-1000)
+  settings.max_dv = 200; settings.overshoot_integral_adaptation = .5;
+
   if(!isnan(pid_settings.Kp)) {
     cout << "Using provided PID values" << endl;
     settings = pid_settings;
@@ -166,11 +166,11 @@ void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
 void pwmPIDPositionTest(HoverboardAPI* api, PID::Settings& pid_settings)
 {
   PID left, right;
-  auto settings = PID::Settings {
-    .Kp = .15, .Ki = .5,  .Kd = .01,
-    .dt = 1, .max = 250, .min = NAN, //500 is PWM (0-1000)
-    .max_dv = 50    // strongly dampening due to twitchy speed readout
-  };
+  auto settings = PID::getDefault();
+  settings.Kp = .15; settings.Ki = .5; settings.Kd = .01;
+  settings.max = 250; //min/max is PWM (0-1000)
+  settings.max_dv = 50;     // strongly dampening due to twitchy speed readout
+
   if(!isnan(pid_settings.Kp)) {
     cout << "Using provided PID values" << endl;
     cout << "Kp: " << pid_settings.Kp << endl;
@@ -258,11 +258,10 @@ int main(int argc, char** argv) {
   if(args.pid.size() != 3) {
     cout << "No/wrong PID format: using test default PIDs" << endl;
   } else {
-    pid_settings = PID::Settings {
-        .Kp = args.pid[0], .Ki = args.pid[1],  .Kd = args.pid[2],
-        .dt = 1, .max = 250, .min = NAN, //500 is PWM (0-1000)
-        .max_dv = 50
-    };
+    pid_settings = PID::getDefault();
+    pid_settings.Kp = args.pid[0]; pid_settings.Ki = args.pid[1];
+    pid_settings.Kd = args.pid[2]; pid_settings.max = 250; //min/max is PWM (0-1000)
+    pid_settings.max_dv = 50;
   }
 
   if(args.test == "hoverboard") {
@@ -274,7 +273,7 @@ int main(int argc, char** argv) {
     pwmPIDSpeedTest(api, pid_settings);
   }
   else if (args.test == "position"){
-    cout << "running own PID controller test (using speed sensor)" << endl;
+    cout << "running own PID controller test (using position sensor)" << endl;
     pwmPIDPositionTest(api, pid_settings);
   }
   else {

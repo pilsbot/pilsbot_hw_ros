@@ -75,7 +75,7 @@ private:
       PID::Settings pid = PID::Settings {
         .Kp = .28, .Ki = 1,  .Kd = .001,
         .dt = 1, .max = 600, .min = NAN, //min/max is PWM (0-2000)
-        .max_dv = 500
+        .max_dv = 200, .overshoot_integral_adaptation = .5
       };
     } hoverboard;
     struct {
