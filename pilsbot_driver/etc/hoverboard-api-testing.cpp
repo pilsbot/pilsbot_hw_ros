@@ -109,8 +109,8 @@ void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
   PID left, right;
   auto settings = PID::getDefault();
   settings.Kp = .25; settings.Ki = 1; settings.Kd = .01;
-  settings.max = 300; //min/max is PWM (0-1000)
-  settings.max_dv = 200; settings.overshoot_integral_adaptation = .5;
+  settings.max = 500; //min/max is PWM (0-1000)
+  settings.max_dv = 300; settings.overshoot_integral_adaptation = 1.;
 
   if(!isnan(pid_settings.Kp)) {
     cout << "Using provided PID values" << endl;
@@ -126,6 +126,7 @@ void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
     unsigned period_ms = target_delta_t.count()*(1000/2);
     cout << "Scheduling Hall info to read every " << period_ms << "ms" << endl;
     api->scheduleRead(HoverboardAPI::Codes::sensHall, -1, period_ms); //, PROTOCOL_SOM_ACK);
+    api->scheduleRead(HoverboardAPI::Codes::sensElectrical, -1, period_ms); //, PROTOCOL_SOM_ACK);
   }
 
   while(1){
@@ -152,10 +153,12 @@ void pwmPIDSpeedTest(HoverboardAPI* api, PID::Settings& pid_settings)
       cout << "Delta t: " << setw(9) << std::left << delta_t.count() << "s " << std::right <<
               "Speed l " << setw(5) << actual_speed_l << "mm/s (target " << target_speed_l << ", pwm " << setw(4) << set_pwm_l << ") "
               "Speed r " << setw(5) << actual_speed_r << "mm/s (target " << target_speed_r << ", pwm " << setw(4) << set_pwm_r << ")\n";
-      api->sendDifferentialPWM(set_pwm_r, set_pwm_l, PROTOCOL_SOM_NOACK);   //!!!!
+      cerr << setw(10) << api->getMotorAmpsAvg(0) << " , " << api->getMotorAmpsAvg(1) << endl;
+      api->sendDifferentialPWM(set_pwm_r, set_pwm_l, PROTOCOL_SOM_NOACK);   // left right swapped!!!!
 
       if(!scheduleRead) {
         api->requestRead(HoverboardAPI::Codes::sensHall, PROTOCOL_SOM_NOACK);
+        api->requestRead(HoverboardAPI::Codes::sensElectrical, PROTOCOL_SOM_NOACK);
       }
     }
 
@@ -253,7 +256,7 @@ int main(int argc, char** argv) {
   setup_serial(args.serial);
   auto api = new HoverboardAPI(serialWrite);
 
-  PID::Settings pid_settings; pid_settings.Kd = NAN;
+  PID::Settings pid_settings; pid_settings.Kp = NAN;
 
   if(args.pid.size() != 3) {
     cout << "No/wrong PID format: using test default PIDs" << endl;
