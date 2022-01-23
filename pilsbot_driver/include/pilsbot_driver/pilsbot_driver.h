@@ -26,7 +26,6 @@ using linear_interpolator::CalibrationListSerialized;
 
 namespace pilsbot_driver
 {
-//TODO: Make this Directly a SystemInterface, probably perhaps maybe dunno
 class PilsbotDriver : public hardware_interface::BaseInterface<hardware_interface::SystemInterface>
 {
   typedef LinearInterpolator<unsigned, double> PotInterpolator;
