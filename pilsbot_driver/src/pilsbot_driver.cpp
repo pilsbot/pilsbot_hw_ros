@@ -206,6 +206,7 @@ hardware_interface::return_type PilsbotDriver::configure(const hardware_interfac
 
 hardware_interface::return_type PilsbotDriver::start()
 {
+
   unsigned retries = 0;
   bool still_he_unsuccessful = true;
   bool still_ho_unsuccessful = true;

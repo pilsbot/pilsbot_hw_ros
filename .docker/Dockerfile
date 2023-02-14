@@ -49,10 +49,10 @@ RUN cd src && \
 RUN apt remove libsdl2-dev -y
 
 RUN source /opt/ros/${ROS_DISTRO}/install/setup.bash && source install/setup.bash && \
-    colcon build --symlink-install 
+    colcon build --symlink-install
 
 RUN rm /bin/sh && mv /bin/sh_tmp /bin/sh
-RUN touch /root/.bashrc && \ 
+RUN touch /root/.bashrc && \
   echo "source /colcon_ws/install/setup.bash \n" >> /root/.bashrc
 
 RUN rm -rf /var/lib/apt/lists/*

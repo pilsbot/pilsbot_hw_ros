@@ -50,6 +50,7 @@ class Head_MCU_node : public rclcpp::Node
       this->declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");
       this->declare_parameter<int>("baud_rate", 115200);
       this->declare_parameter<int>("publish_rate", 10);
+      // TODO: Add publisher for MCP portexpander to enable/disable power to board
       this->declare_parameter<CalibrationListSerialized>("calibration_val",
           CalibrationListSerialized());
 
@@ -60,13 +61,14 @@ class Head_MCU_node : public rclcpp::Node
       params_.publish_rate = this->get_parameter("publish_rate").as_int();
       assert(params_.publish_rate > 0);
 
-      if(! interpolator_.deserialize(
-          this->get_parameter("calibration_val").as_double_array())) {
+      if(!interpolator_.deserialize(this->get_parameter("calibration_val").as_double_array())) {
         RCLCPP_ERROR(this->get_logger(), "calibration values could not be loaded");
       }
 
-      if(!open_serial_port())
-        return;
+      if(!open_serial_port()) {
+        throw std::runtime_error("Could not open serial port " + params_.devicename);
+      }
+
       set_serial_properties();
       RCLCPP_INFO(this->get_logger(),
           "Opened device %s with baudrate %d", params_.devicename.c_str(),params_.baud_rate);
