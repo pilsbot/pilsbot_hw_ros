@@ -8,5 +8,6 @@ ament_package()
 install(FILES 
 			config/diff_drive_controller.yaml
 			config/acker_diff_controller.yaml
+			config/acker_diff_controller_sim.yaml
         DESTINATION share/${PROJECT_NAME}/config
 )
