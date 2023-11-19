@@ -2,12 +2,12 @@ teleop_node:
   ros__parameters:
     axis_linear.x: 2
     scale_linear.x: .5
-    scale_linear_turbo.x: 1.5
+    scale_linear_turbo.x: 0.4
     
     # this is for steering angle velocity
     axis_linear.z: 2
     scale_linear.z: 0.6
-    scale_linear_turbo.x: 0.8
+    scale_linear_turbo.z: 0.7
 
     axis_angular.yaw: 3
     scale_angular.yaw: 1.4
