@@ -44,8 +44,18 @@ public:
 
   void tick();
   void read_from_head_mcu();
+  bool set_head_mcu_pin(const bool pin);
+  bool set_update_period_of_head_mcu(head_mcu::UpdatePeriodMs period_ms);
+
 
 private:
+  enum class WhichSerial
+  {
+    hoverboard,
+    head_mcu
+  };
+
+  bool try_setup_serial(const WhichSerial which);
 
   struct WheelStatus {
     double commanded_turning_rate = 0;

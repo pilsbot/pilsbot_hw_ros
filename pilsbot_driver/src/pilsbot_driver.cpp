@@ -5,6 +5,7 @@
 
 #include <fcntl.h>
 #include <termios.h>
+#include <arpa/inet.h>  //ntoh
 #include <unistd.h>
 
 int serialWrite(unsigned char* data, int len)
@@ -206,100 +207,13 @@ hardware_interface::return_type PilsbotDriver::configure(const hardware_interfac
 
 hardware_interface::return_type PilsbotDriver::start()
 {
-
-  unsigned retries = 0;
-  bool still_he_unsuccessful = true;
-  bool still_ho_unsuccessful = true;
-  while(retries < params_.serial_connect_retries) {
-    if ((hoverboard_fd = ::open(params_.hoverboard.tty_device.c_str(), O_RDWR | O_NOCTTY | O_NDELAY)) < 0)
-    {
-      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-                   "Cannot open serial device %s to hoverboard_api",
-                   params_.hoverboard.tty_device.c_str());
-    } else {
-      still_ho_unsuccessful = false;
-    }
-    if ((head_mcu_fd = ::open(params_.head_mcu.tty_device.c_str(), O_RDWR | O_NOCTTY)) < 0) {
-      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-                   "Cannot open serial device %s to head_mcu",
-                   params_.head_mcu.tty_device.c_str());
-    } else {
-      still_he_unsuccessful = false;
-    }
-    if(still_he_unsuccessful || still_ho_unsuccessful) {
-      retries++;
-      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-                   "retrying connection (%d of %d)",
-                   retries, params_.serial_connect_retries);
-      rclcpp::sleep_for(std::chrono::seconds(1));
-    } else {
-      break;
-    }
-  }
-
-  if(still_ho_unsuccessful) {
-    RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
-                 "Could not open serial device %s to pilsbot controller board",
-                 params_.hoverboard.tty_device.c_str());
-    if (head_mcu_fd != -1)
-      ::close(head_mcu_fd);
-    return hardware_interface::return_type::ERROR;
-  }
-  if(still_he_unsuccessful) {
-    RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
-                 "Could not open serial device %s to head mcu board",
-                 params_.head_mcu.tty_device.c_str());
-    if (hoverboard_fd != -1)
-      ::close(hoverboard_fd);
-    return hardware_interface::return_type::ERROR;
-  }
-
-  // CONFIGURE THE UART -- connecting to the board
-  // The flags (defined in /usr/include/termios.h - see
-  // http://pubs.opengroup.org/onlinepubs/007908799/xsh/termios.h.html):
-  struct termios options;
-  tcgetattr(hoverboard_fd, &options);
-  options.c_cflag = B115200 | CS8 | CLOCAL | CREAD;  //<Set baud rate
-  options.c_iflag = IGNPAR;
-  options.c_oflag = 0;
-  options.c_lflag = 0;
-  tcflush(hoverboard_fd, TCIFLUSH);
-  tcsetattr(hoverboard_fd, TCSANOW, &options);
-
-  api = new HoverboardAPI(serialWrite);
-
-  // configuring head_mcu UART
-  tcflush(head_mcu_fd, TCIOFLUSH); // flush previous bytes
-
-  struct termios tio;
-  if(tcgetattr(head_mcu_fd, &tio) < 0)
-    perror("head_mcu tcgetattr");
-
-  tio.c_iflag &= ~(INLCR | IGNCR | ICRNL | IXON | IXOFF);
-  tio.c_oflag &= ~(ONLCR | OCRNL);
-  tio.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-
-  switch (params_.head_mcu.baudrate)
+  if (!try_setup_serial(WhichSerial::head_mcu))
   {
-  case 9600:   cfsetospeed(&tio, B9600);   break;
-  case 19200:  cfsetospeed(&tio, B19200);  break;
-  case 38400:  cfsetospeed(&tio, B38400);  break;
-  case 115200: cfsetospeed(&tio, B115200); break;
-  case 230400: cfsetospeed(&tio, B230400); break;
-  case 460800: cfsetospeed(&tio, B460800); break;
-  case 500000: cfsetospeed(&tio, B500000); break;
-  default:
-    RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
-        "head_mcu: Baudrate of %d not supported, using 115200!", params_.head_mcu.baudrate);
-    cfsetospeed(&tio, B115200);
-    break;
+    return hardware_interface::return_type::ERROR;
   }
-  cfsetispeed(&tio, cfgetospeed(&tio));
-
-  if(tcsetattr(head_mcu_fd, TCSANOW, &tio) < 0) {
-    RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-        "head_mcu: Could not set terminal attributes!");
-    perror("tcsetattr");
+  if (!try_setup_serial(WhichSerial::hoverboard))
+  {
+    return hardware_interface::return_type::ERROR;
   }
 
   last_serial_read = clock.now();
@@ -443,35 +357,220 @@ void PilsbotDriver::tick()
   api->protocolTick();
 }
 
-void PilsbotDriver::read_from_head_mcu() {
-  head_mcu::UpdatePeriodMs period_ms = params_.head_mcu.update_period_ms;
-  if(::write(head_mcu_fd, &period_ms, sizeof(head_mcu::UpdatePeriodMs)) < 0){
+
+bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which)
+{
+  unsigned retries = 0;
+  bool still_unsuccessful = true;
+
+  int* fd = nullptr;
+  const char* path = nullptr;
+  const char* name = nullptr;
+
+  switch (which)
+  {
+    case WhichSerial::hoverboard:
+      fd = &hoverboard_fd;
+      path = params_.hoverboard.tty_device.c_str();
+      name = "pilsbot motor control board";
+      break;
+    case WhichSerial::head_mcu:
+      fd = &head_mcu_fd;
+      path = params_.head_mcu.tty_device.c_str();
+      name = "head mcu steering angle sensor board";
+      break;
+    default:
+      throw new std::runtime_error("Invalid serial device to setup");
+  }
+
+  while(retries < params_.serial_connect_retries)
+  {
+    if ((*fd = ::open(path, O_RDWR | O_NOCTTY | O_NDELAY)) < 0)
+    {
+      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+                   "Cannot open serial device %s to hoverboard_api",
+                   path);
+    } else {
+      still_unsuccessful = false;
+    }
+
+    if(still_unsuccessful) {
+      retries++;
+      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+                   "retrying connection for %s (%d of %d)",
+                   name, retries, params_.serial_connect_retries);
+
+      if (which == WhichSerial::hoverboard)
+      {
+        // We are trying to connect to hoverboard, and it did not succeed.
+        // let's try to be smart about it.
+        if (head_mcu_fd) // ASSUME head_mcu connection was successful
+        {
+          set_head_mcu_pin(true);
+          rclcpp::sleep_for(std::chrono::milliseconds(500));
+          set_head_mcu_pin(false);
+          rclcpp::sleep_for(std::chrono::milliseconds(500));
+        }
+      }
+      rclcpp::sleep_for(std::chrono::seconds(1));
+    } else {
+      // success
+      break;
+    }
+  }
+
+  if(still_unsuccessful) {
+    RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
+                 "Could not open serial device %s to %s",
+                 path, name);
+    if (*fd != -1)
+      ::close(*fd);
+    return false;
+  }
+
+  // we found and opened the thing
+
+  // CONFIGURE THE UART -- connecting to the board
+  // The flags (defined in /usr/include/termios.h - see
+  // http://pubs.opengroup.org/onlinepubs/007908799/xsh/termios.h.html):
+
+  if (which == WhichSerial::hoverboard)
+  {
+    // HB specific
+    struct termios options;
+    tcgetattr(*fd, &options);
+    options.c_cflag = B115200 | CS8 | CLOCAL | CREAD;  //<Set baud rate
+    options.c_iflag = IGNPAR;
+    options.c_oflag = 0;
+    options.c_lflag = 0;
+    tcflush(*fd, TCIFLUSH);
+    if(tcsetattr(*fd, TCSANOW, &options) < 0) {
+      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+          "hoverboard: Could not set terminal attributes!");
+      perror("tcsetattr");
+    }
+
+    api = new HoverboardAPI(serialWrite);
+  }
+  else if (which == WhichSerial::head_mcu)
+  {
+    // head_mcu specific
+    // configuring head_mcu UART
+    tcflush(*fd, TCIOFLUSH); // flush previous bytes
+
+    struct termios tio;
+    if(tcgetattr(*fd, &tio) < 0)
+      perror("head_mcu tcgetattr");
+
+    tio.c_iflag &= ~(INLCR | IGNCR | ICRNL | IXON | IXOFF);
+    tio.c_oflag &= ~(ONLCR | OCRNL);
+    tio.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+
+    switch (params_.head_mcu.baudrate)
+    {
+    case 9600:   cfsetospeed(&tio, B9600);   break;
+    case 19200:  cfsetospeed(&tio, B19200);  break;
+    case 38400:  cfsetospeed(&tio, B38400);  break;
+    case 115200: cfsetospeed(&tio, B115200); break;
+    case 230400: cfsetospeed(&tio, B230400); break;
+    case 460800: cfsetospeed(&tio, B460800); break;
+    case 500000: cfsetospeed(&tio, B500000); break;
+    default:
+      RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
+          "head_mcu: Baudrate of %d not supported, using 115200!", params_.head_mcu.baudrate);
+      cfsetospeed(&tio, B115200);
+      break;
+    }
+    cfsetispeed(&tio, cfgetospeed(&tio));
+
+    if(tcsetattr(*fd, TCSANOW, &tio) < 0) {
+      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+          "head_mcu: Could not set terminal attributes!");
+      perror("tcsetattr");
+    }
+  }
+  return true;
+}
+
+bool PilsbotDriver::set_update_period_of_head_mcu(head_mcu::UpdatePeriodMs period_ms)
+{
+  head_mcu::Command cmd;
+  memset(&cmd, 0, sizeof(decltype(cmd)));
+
+  cmd.magic = head_mcu::Command::MAGIC;
+  cmd.type = head_mcu::Command::setUpdatePeriod;
+  cmd.updatePeriod_ms = ::htons(period_ms);
+
+  if(::write(head_mcu_fd, &cmd, sizeof(decltype(cmd))) < 0){
     RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-        "Head_mcu: could not set update period of %d ms", period_ms);
-    return;
+        "could not set update period of %d ms", period_ms);
+    return false;
   }
   RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
-      "Head_mcu: Probably successfully set update period of %d ms", period_ms);
+      "Probably successfully set head mcu update period of %d ms", period_ms);
+  return true;
+}
+
+bool PilsbotDriver::set_head_mcu_pin(const bool val)
+{
+  head_mcu::Command cmd;
+  memset(&cmd, 0, sizeof(decltype(cmd)));
+
+  cmd.magic = head_mcu::Command::MAGIC;
+  cmd.type = head_mcu::Command::setOutputFrame;
+  cmd.frame.digital0_8.as_bit.bit2 = val;
+
+  if(::write(head_mcu_fd, &cmd, sizeof(decltype(cmd))) < 0){
+    RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+        "could not set pin to %s", val ? "on" : "off");
+    return false;
+  }
+  RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
+      "Probably successfully set pin to %s", val ? "on" : "off");
+  return true;
+}
+
+void PilsbotDriver::read_from_head_mcu()
+{
+  if(!set_update_period_of_head_mcu(params_.head_mcu.update_period_ms)){
+    RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+        "Head_mcu: could not set update period of %d ms", params_.head_mcu.update_period_ms);
+    return;
+  }
 
   RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
       "head_mcu serial connection thread started");
-  while(!stop_) {
+  while(!stop_)
+  {
     head_mcu::Frame frame;
-    int ret = ::read(head_mcu_fd, &frame, sizeof(head_mcu::Frame));
-    if(ret == sizeof(head_mcu::Frame)) {
+    auto ret = ::read(head_mcu_fd, &frame, sizeof(head_mcu::Frame));
+    if(ret == sizeof(head_mcu::Frame))
+    {
+      // Assume a valid frame
       axle_sensors_.steering_angle_raw = frame.analog0;
       axle_sensors_.endstop_l = frame.digital0_8.as_bit.bit0;
       axle_sensors_.endstop_r = frame.digital0_8.as_bit.bit1;
       axle_sensors_.steering_angle_normalized =
             interpolator_(frame.analog0);
-    } else if(ret > 0) {
-      RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
-          "Head_mcu: serial connection out of sync!");
-      // TODO: maybe reopen serial, this resets the controller
-    } else {
-      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-          "Head_mcu: serial connection closed or something: %d", ret);
-      return;
+    }
+    else
+    {
+      if(ret > 0)
+      {
+        RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
+            "Head_mcu: serial connection out of sync!");
+      }
+      else
+      {
+        RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+          "Head_mcu: serial connection closed or something: %d", errno);
+      }
+      // restart serial connection, perhaps this helps.
+      if (!stop_)
+      {
+        close(head_mcu_fd); // re-connect should re-start controller
+        try_setup_serial(WhichSerial::head_mcu);
+      }
     }
   }
 }

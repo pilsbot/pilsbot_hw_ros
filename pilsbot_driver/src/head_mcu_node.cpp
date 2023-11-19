@@ -194,7 +194,7 @@ class Head_MCU_node : public rclcpp::Node
           state_.stamp = this->now();
 
           {
-            std::lock_guard<std::mutex> lk(state_m_); // why exacly this?
+            std::lock_guard<std::mutex> lk(state_m_); // why exactly this?
             state_updated_ = true;
           }
           state_updated_cv_.notify_one();  // might as well be "all", we just have one consumer
