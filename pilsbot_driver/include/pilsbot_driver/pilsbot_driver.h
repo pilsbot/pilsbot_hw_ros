@@ -43,9 +43,6 @@ public:
   std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
 
   void tick();
-  void read_from_head_mcu_continuously();
-  bool set_head_mcu_pin(const bool pin);
-  bool set_update_period_of_head_mcu(head_mcu::UpdatePeriodMs period_ms);
 
 
 private:
@@ -55,7 +52,15 @@ private:
     head_mcu
   };
 
+  void read_from_head_mcu_continuously();
+
+  bool set_head_mcu_pin(const bool pin);
+
+  bool set_update_period_of_head_mcu(head_mcu::UpdatePeriodMs period_ms);
+
   bool try_setup_serial(const WhichSerial which);
+
+  void try_toggle_hoverboard_power();
 
   struct WheelStatus {
     double commanded_turning_rate = 0;

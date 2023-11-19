@@ -243,9 +243,18 @@ hardware_interface::return_type PilsbotDriver::stop()
 {
   stop_ = true;
   if (hoverboard_fd != -1)
+  {
     close(hoverboard_fd);
+    if ((clock.now() - last_serial_read) <= rclcpp::Duration(1, 0))
+    {
+      // assume a connection if below one second
+      try_toggle_hoverboard_power();
+    }
+  }
   if (head_mcu_fd != -1)
+  {
     close(head_mcu_fd);
+  }
 
   return hardware_interface::return_type::OK;
 }
@@ -292,14 +301,7 @@ hardware_interface::return_type PilsbotDriver::read()
     axle_sensors_.steering_angle_normalized = NAN;
 
     // Try restarting / starting the thing.
-    if (head_mcu_fd) // ASSUME head_mcu connection was successful
-    {
-      // Waits are OK, because when we are not connected to the Hoverboard, all is lost anyways
-      set_head_mcu_pin(true);
-      rclcpp::sleep_for(std::chrono::milliseconds(500));
-      set_head_mcu_pin(false);
-      rclcpp::sleep_for(std::chrono::milliseconds(500));
-    }
+    try_toggle_hoverboard_power();
 
 
     return hardware_interface::return_type::ERROR;
@@ -425,13 +427,7 @@ bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which)
         // We are trying to connect to hoverboard, and it did not succeed.
         // let's try to be smart about it.
         // This will however be futile, as the on/off state of the HB does not affect the serial setup.
-        if (head_mcu_fd) // ASSUME head_mcu connection was successful
-        {
-          set_head_mcu_pin(true);
-          rclcpp::sleep_for(std::chrono::milliseconds(500));
-          set_head_mcu_pin(false);
-          rclcpp::sleep_for(std::chrono::milliseconds(500));
-        }
+        try_toggle_hoverboard_power();
       }
       rclcpp::sleep_for(std::chrono::seconds(1));
     } else {
@@ -566,6 +562,17 @@ bool PilsbotDriver::set_head_mcu_pin(const bool val)
   RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
       "Probably successfully set pin to %s", val ? "on" : "off");
   return true;
+}
+
+void PilsbotDriver::try_toggle_hoverboard_power()
+{
+  if (head_mcu_fd) // if head_mcu connection is somewhat enabled
+  {
+    set_head_mcu_pin(true);
+    rclcpp::sleep_for(std::chrono::milliseconds(500));
+    set_head_mcu_pin(false);
+    rclcpp::sleep_for(std::chrono::milliseconds(500));
+  }
 }
 
 void PilsbotDriver::read_from_head_mcu_continuously()
