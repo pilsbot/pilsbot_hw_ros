@@ -216,12 +216,20 @@ hardware_interface::return_type PilsbotDriver::start()
     return hardware_interface::return_type::ERROR;
   }
 
+  if (hoverboard_fd < 0 || head_mcu_fd < 0)
+  {
+    RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
+        "Filedescriptor to hoverboard (%d) or head_mcu (%d) invalid!",
+        hoverboard_fd, head_mcu_fd);
+    return hardware_interface::return_type::ERROR;
+  }
+
   last_serial_read = clock.now();
   last_write_tick = clock.now();
 
   // ok, go on little bird
   stop_ = false;
-  reading_function_ = std::thread(&PilsbotDriver::read_from_head_mcu, this);
+  reading_function_ = std::thread(&PilsbotDriver::read_from_head_mcu_continuously, this);
 
   for (auto& wheel : wheels_)
   {
@@ -282,6 +290,18 @@ hardware_interface::return_type PilsbotDriver::read()
         params_.hoverboard.tty_device.c_str(), last_serial_read.seconds());
     //TODO: Is there a better way for controller to know this return value (ERROR)?
     axle_sensors_.steering_angle_normalized = NAN;
+
+    // Try restarting / starting the thing.
+    if (head_mcu_fd) // ASSUME head_mcu connection was successful
+    {
+      // Waits are OK, because when we are not connected to the Hoverboard, all is lost anyways
+      set_head_mcu_pin(true);
+      rclcpp::sleep_for(std::chrono::milliseconds(500));
+      set_head_mcu_pin(false);
+      rclcpp::sleep_for(std::chrono::milliseconds(500));
+    }
+
+
     return hardware_interface::return_type::ERROR;
   }
 
@@ -388,8 +408,8 @@ bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which)
     if ((*fd = ::open(path, O_RDWR | O_NOCTTY | O_NDELAY)) < 0)
     {
       RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-                   "Cannot open serial device %s to hoverboard_api",
-                   path);
+                   "Cannot open serial device %s to %s",
+                   path, name);
     } else {
       still_unsuccessful = false;
     }
@@ -404,6 +424,7 @@ bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which)
       {
         // We are trying to connect to hoverboard, and it did not succeed.
         // let's try to be smart about it.
+        // This will however be futile, as the on/off state of the HB does not affect the serial setup.
         if (head_mcu_fd) // ASSUME head_mcu connection was successful
         {
           set_head_mcu_pin(true);
@@ -424,7 +445,10 @@ bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which)
                  "Could not open serial device %s to %s",
                  path, name);
     if (*fd != -1)
+    {
       ::close(*fd);
+      *fd = -1;
+    }
     return false;
   }
 
@@ -488,6 +512,20 @@ bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which)
           "head_mcu: Could not set terminal attributes!");
       perror("tcsetattr");
     }
+
+    auto fl = fcntl(head_mcu_fd, F_GETFL, 0);
+    if (fl & O_NONBLOCK)
+    {
+      RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
+        "head_mcu: was non-blocking socket...?");
+    }
+    // set blocking (we rely on that to sync)
+    if (!fcntl(head_mcu_fd, F_SETFL, fl & ~O_NONBLOCK))
+    {
+      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+          "head_mcu: Could not set non_block attributes!");
+      perror("fcntl SETFL");
+    }
   }
   return true;
 }
@@ -499,7 +537,7 @@ bool PilsbotDriver::set_update_period_of_head_mcu(head_mcu::UpdatePeriodMs perio
 
   cmd.magic = head_mcu::Command::MAGIC;
   cmd.type = head_mcu::Command::setUpdatePeriod;
-  cmd.updatePeriod_ms = ::htons(period_ms);
+  cmd.updatePeriod_ms = htons(period_ms);  // '::' prefix removed because of ancient GCC on jetson
 
   if(::write(head_mcu_fd, &cmd, sizeof(decltype(cmd))) < 0){
     RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
@@ -530,47 +568,58 @@ bool PilsbotDriver::set_head_mcu_pin(const bool val)
   return true;
 }
 
-void PilsbotDriver::read_from_head_mcu()
+void PilsbotDriver::read_from_head_mcu_continuously()
 {
-  if(!set_update_period_of_head_mcu(params_.head_mcu.update_period_ms)){
-    RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-        "Head_mcu: could not set update period of %d ms", params_.head_mcu.update_period_ms);
-    return;
-  }
-
-  RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
-      "head_mcu serial connection thread started");
+  // outer try-restart-serial-loop
   while(!stop_)
   {
-    head_mcu::Frame frame;
-    auto ret = ::read(head_mcu_fd, &frame, sizeof(head_mcu::Frame));
-    if(ret == sizeof(head_mcu::Frame))
+    if(!set_update_period_of_head_mcu(params_.head_mcu.update_period_ms))
     {
-      // Assume a valid frame
-      axle_sensors_.steering_angle_raw = frame.analog0;
-      axle_sensors_.endstop_l = frame.digital0_8.as_bit.bit0;
-      axle_sensors_.endstop_r = frame.digital0_8.as_bit.bit1;
-      axle_sensors_.steering_angle_normalized =
-            interpolator_(frame.analog0);
+      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+          "Head_mcu: could not set update period of %d ms", params_.head_mcu.update_period_ms);
+      return;
     }
-    else
+
+    RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
+        "head_mcu serial connection thread started");
+    while(!stop_)
     {
-      if(ret > 0)
+      head_mcu::Frame frame;
+      auto ret = ::read(head_mcu_fd, &frame, sizeof(head_mcu::Frame));
+      if(ret == sizeof(head_mcu::Frame))
       {
-        RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
-            "Head_mcu: serial connection out of sync!");
+        // Assume a valid frame
+        axle_sensors_.steering_angle_raw = frame.analog0;
+        axle_sensors_.endstop_l = frame.digital0_8.as_bit.bit0;
+        axle_sensors_.endstop_r = frame.digital0_8.as_bit.bit1;
+        axle_sensors_.steering_angle_normalized =
+              interpolator_(frame.analog0);
       }
       else
       {
-        RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-          "Head_mcu: serial connection closed or something: %d", errno);
+        if(ret > 0)
+        {
+          RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
+              "Head_mcu: serial connection out of sync!");
+        }
+        else
+        {
+          auto val = fcntl(head_mcu_fd, F_GETFL, 0);
+          RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 500,
+            "Head_mcu: serial connection closed or something: %d %s GETFL: 0x%X",
+            ret, strerror(errno), val);
+        }
+        break; // break from inner succeeding-read loop
       }
-      // restart serial connection, perhaps this helps.
-      if (!stop_)
-      {
-        close(head_mcu_fd); // re-connect should re-start controller
-        try_setup_serial(WhichSerial::head_mcu);
-      }
+    }
+    // restart serial connection, perhaps this helps.
+    if (!stop_)
+    {
+      RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
+        "Head_mcu: re-trying serial connection.");
+      close(head_mcu_fd); // re-connect should re-start controller
+      head_mcu_fd = -1;
+      try_setup_serial(WhichSerial::head_mcu);
     }
   }
 }

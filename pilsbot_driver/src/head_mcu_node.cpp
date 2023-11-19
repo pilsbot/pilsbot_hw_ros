@@ -148,9 +148,9 @@ class Head_MCU_node : public rclcpp::Node
 
     cmd.magic = head_mcu::Command::MAGIC;
     cmd.type = head_mcu::Command::setUpdatePeriod;
-    cmd.updatePeriod_ms = ::htons(period_ms);
+    cmd.updatePeriod_ms = htons(period_ms); // :: removed because of ancient GCC on jetson
 
-    if(::write(serial_fd_, &cmd, sizeof(decltype(cmd))) < 0){
+    if(::write(serial_fd_, &cmd, sizeof(decltype(cmd))) != sizeof(decltype(cmd))){
       printf("could not set update period of %d ms\n", period_ms);
       return;
     }
