@@ -13,6 +13,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <csignal>
+#include <arpa/inet.h>  //ntoh
 
 
 using namespace std::chrono_literals;
@@ -142,45 +143,75 @@ class Head_MCU_node : public rclcpp::Node
   }
 
   void set_update_period_of_target(head_mcu::UpdatePeriodMs period_ms) {
-    if(::write(serial_fd_, &period_ms, sizeof(head_mcu::UpdatePeriodMs)) < 0){
-      RCLCPP_ERROR(this->get_logger(),
-          "could not set update period of %d ms", period_ms);
+    head_mcu::Command cmd;
+    memset(&cmd, 0, sizeof(decltype(cmd)));
+
+    cmd.magic = head_mcu::Command::MAGIC;
+    cmd.type = head_mcu::Command::setUpdatePeriod;
+    cmd.updatePeriod_ms = ::htons(period_ms);
+
+    if(::write(serial_fd_, &cmd, sizeof(decltype(cmd))) < 0){
+      printf("could not set update period of %d ms\n", period_ms);
+      return;
     }
     RCLCPP_INFO(this->get_logger(),
         "Probably successfully set update period of %d ms", period_ms);
   }
 
+  void set_pin(const bool val)
+  {
+    head_mcu::Command cmd;
+    memset(&cmd, 0, sizeof(decltype(cmd)));
+
+    cmd.magic = head_mcu::Command::MAGIC;
+    cmd.type = head_mcu::Command::setOutputFrame;
+    cmd.frame.digital0_8.as_bit.bit2 = val;
+
+    if(::write(serial_fd_, &cmd, sizeof(decltype(cmd))) < 0){
+      printf("could not set pin to %s ms\n", val ? "on" : "off");
+      return;
+    }
+    RCLCPP_INFO(this->get_logger(),
+        "Probably successfully set pin to %s\n", val ? "on" : "off");
+  }
+
   void read_serial() {
 
-    set_update_period_of_target(ceil(1000/params_.publish_rate));
+    while (!stop_)
+    {
+      set_update_period_of_target(ceil(1000/params_.publish_rate));
 
-    RCLCPP_INFO(this->get_logger(),
-        "serial connection thread started");
-    while(!stop_) {
-      head_mcu::Frame frame;
-      int ret = ::read(serial_fd_, &frame, sizeof(head_mcu::Frame));
-      if(ret == sizeof(head_mcu::Frame)) {
-        auto& s = state_.sensors;
-        s.steering_angle_raw = frame.analog0;
-        s.endstop_l = frame.digital0_8.as_bit.bit0;
-        s.endstop_r = frame.digital0_8.as_bit.bit1;
-        state_.stamp = this->now();
+      RCLCPP_INFO(this->get_logger(),
+          "serial connection thread started");
+      while(!stop_) {
+        head_mcu::Frame frame;
+        int ret = ::read(serial_fd_, &frame, sizeof(head_mcu::Frame));
+        if(ret == sizeof(head_mcu::Frame)) {
+          auto& s = state_.sensors;
+          s.steering_angle_raw = frame.analog0;
+          s.endstop_l = frame.digital0_8.as_bit.bit0;
+          s.endstop_r = frame.digital0_8.as_bit.bit1;
+          state_.stamp = this->now();
 
-        {
-          std::lock_guard<std::mutex> lk(state_m_); // why exacyly this?
-          state_updated_ = true;
+          {
+            std::lock_guard<std::mutex> lk(state_m_); // why exacly this?
+            state_updated_ = true;
+          }
+          state_updated_cv_.notify_one();  // might as well be "all", we just have one consumer
+
+        } else if(ret > 0) {
+          RCLCPP_WARN(this->get_logger(),
+              "serial connection out of sync!");
+          break;
+        } else {
+          RCLCPP_ERROR(this->get_logger(),
+              "serial connection closed or something: %d", ret);
+          break;
         }
-        state_updated_cv_.notify_one();  // might as well be "all", we just have one consumer
-
-      } else if(ret > 0) {
-        RCLCPP_WARN(this->get_logger(),
-            "serial connection out of sync!");
-        // todo: maybe reopen serial, this resets the controller
-      } else {
-        RCLCPP_ERROR(this->get_logger(),
-            "serial connection closed or something: %d", ret);
-        return;
       }
+      // RETRY!!
+      if (!stop_)
+        open_serial_port();
     }
   }
 
