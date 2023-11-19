@@ -105,7 +105,7 @@ def generate_launch_description():
     spawn_jsb_controller = Node(
         package="controller_manager",
         executable="spawner.py",
-        arguments=["pilsbot_joint_publisher"],
+        arguments=["joint_state_publisher"],
         output="screen",
     )
 

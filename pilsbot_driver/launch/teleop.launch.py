@@ -39,7 +39,7 @@ def generate_launch_description():
             'stderr': 'screen',
         }
     )
-    
+
     joystick_mapper = Node(
         package='teleop_twist_joy',
         executable='teleop_node',
@@ -50,7 +50,7 @@ def generate_launch_description():
             'stderr': 'screen',
         }
     )
-    
+
     twist_2_acker = Node(
         package='acker_diff_controller',
         executable='cmd_vel_to_ackermann.py',
