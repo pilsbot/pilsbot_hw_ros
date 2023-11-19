@@ -24,7 +24,7 @@ import xacro
 
 def generate_launch_description():
     example_parameters = [
-        {"serial_port": "/dev/ttyACM0"},
+        {"serial_port": "/dev/ttySparkfunProMicro1"},
         {"publish_rate": 100},
         {"calibration_val" : [
   51393, -1.56601,
@@ -33,7 +33,7 @@ def generate_launch_description():
             ]
         }
     ]
-    
+
     mcu_node = Node(
       package='pilsbot_driver',
       executable='head_mcu_node',
