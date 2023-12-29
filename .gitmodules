@@ -10,3 +10,6 @@
 [submodule "pilsbot_driver/src/pid-controller"]
 	path = pilsbot_driver/src/pid-controller
 	url = https://github.com/Cirromulus/minimal-PID-controller
+[submodule "pilsbot_indicators"]
+	path = pilsbot_indicators
+	url = https://github.com/pilsbot/indicators
