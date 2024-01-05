@@ -351,8 +351,8 @@ hardware_interface::return_type PilsbotDriver::write()
   double target_speed_l = wheels_[0].commanded_turning_rate * params_.wheel_radius * 1000;
   double target_speed_r = wheels_[1].commanded_turning_rate * params_.wheel_radius * 1000;
 
-  double actual_speed_l = api->getSpeed0_mms();
-  double actual_speed_r = api->getSpeed1_mms();
+  double actual_speed_l = api->getSpeed1_mms();   // NOTE they are switched!!!
+  double actual_speed_r = api->getSpeed0_mms();
 
   if(axle_sensors_.endstop_l || axle_sensors_.endstop_r) {
         RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
@@ -364,8 +364,8 @@ hardware_interface::return_type PilsbotDriver::write()
   int set_pwm_l = wheel_controller_l.calculate(target_speed_l, actual_speed_l, pid_settings);
   int set_pwm_r = wheel_controller_r.calculate(target_speed_r, actual_speed_r, pid_settings);
 
-  // note l and r are switched!!!!
-  api->sendDifferentialPWM(set_pwm_r, set_pwm_l, PROTOCOL_SOM_NOACK);
+  // note l and r are (UN?!??!) switched!!!!
+  api->sendDifferentialPWM(set_pwm_l, set_pwm_r, PROTOCOL_SOM_NOACK);
 
   api->protocolTick();
   last_write_tick = clock.now();
