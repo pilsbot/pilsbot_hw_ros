@@ -7,7 +7,7 @@ teleop_node:
     # this is for steering angle velocity.
     # a big number makes it less authoratibve about slowing down before getting to target
     axis_linear.z: 2
-    scale_linear.z: 1 #was .6
+    scale_linear.z: 1. #was .6
     scale_linear_turbo.z: 12.
 
     #  i think this is steering angle forgot & dru nk]
