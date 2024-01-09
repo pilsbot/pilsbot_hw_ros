@@ -1,17 +1,19 @@
 teleop_node:
   ros__parameters:
     axis_linear.x: 2
-    scale_linear.x: .5
-    scale_linear_turbo.x: 0.4
-    
-    # this is for steering angle velocity
-    axis_linear.z: 2
-    scale_linear.z: 0.6
-    scale_linear_turbo.z: 0.7
+    scale_linear.x: .4
+    scale_linear_turbo.x: 0.6
 
+    # this is for steering angle velocity.
+    # a big number makes it less authoratibve about slowing down before getting to target
+    axis_linear.z: 2
+    scale_linear.z: 1 #was .6
+    scale_linear_turbo.z: 12.
+
+    #  i think this is steering angle forgot & dru nk]
     axis_angular.yaw: 3
-    scale_angular.yaw: 1.4
-    scale_angular_turbo.yaw: .8
+    scale_angular.yaw: 1. # 1.4
+    scale_angular_turbo.yaw: .3
 
     enable_button: 5  # R1 shoulder button
     enable_turbo_button: 4  # L1 shoulder button

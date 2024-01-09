@@ -97,10 +97,10 @@ private:
       unsigned baudrate = 115200;
       unsigned update_period_ms = 5;
       CalibrationListSerialized calibration_val = {
-            // TODO: proper config loading
-            50601, -1.56601,
-            32432, 0.0,
-            14142, 1.56601
+        // TODO: proper config loading
+        50182, -1.56601,
+        31881, 0.0,
+        14017, 1.56601
       };
     } head_mcu;
     unsigned serial_connect_retries = 3;
