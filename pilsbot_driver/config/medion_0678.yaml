@@ -6,8 +6,9 @@ teleop_node:
 
     # this is for steering angle velocity.
     # a big number makes it less authoratibve about slowing down before getting to target
+    # The scale is "about the angle error in rad" until stop
     axis_linear.z: 2
-    scale_linear.z: 0.5
+    scale_linear.z: 0.4
     scale_linear_turbo.z: 1.0
 
     # This is the steering angle in rad (about 0.015 rad in a degree)
@@ -17,3 +18,7 @@ teleop_node:
 
     enable_button: 5  # R1 shoulder button
     enable_turbo_button: 4  # L1 shoulder button
+
+joy_node:
+  ros__parameters:
+    coalesce_interval_ms: 2 # default: 1

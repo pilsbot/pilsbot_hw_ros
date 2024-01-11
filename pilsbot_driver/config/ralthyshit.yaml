@@ -17,4 +17,4 @@ teleop_node:
     scale_angular_turbo.yaw: 0.15
 
     enable_button: 5  # R1 shoulder button
-    enable_turbo_button: 7  # L1 shoulder button
+    enable_turbo_button: 4  # L1 shoulder button
