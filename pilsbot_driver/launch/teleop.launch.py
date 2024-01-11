@@ -32,7 +32,8 @@ def generate_launch_description():
         package='joy',
         executable='joy_node',
         parameters=[
-            {"dev" : LaunchConfiguration('joystick_dev')}
+            {"dev" : LaunchConfiguration('joystick_dev')},
+            {'coalesce_interval_ms' : 2}    # this might or might not work. Well.
             ],
         output={
             'stdout': 'screen',
@@ -41,35 +42,38 @@ def generate_launch_description():
     )
 
     joystick_mapper = Node(
-        package='teleop_twist_joy',
+        package='teleop_acker_joy',
         executable='teleop_node',
         name='teleop_node',
         parameters=[joystick_mapping_config],
         output={
             'stdout': 'screen',
             'stderr': 'screen',
-        }
+        },
+        remappings=[
+            ('/cmd_vel', '/pilsbot_velocity_controller/cmd_vel'),
+        ]
     )
 
-    twist_2_acker = Node(
-        package='acker_diff_controller',
-        executable='cmd_vel_to_ackermann.py',
-        parameters=[
-            {"message_type" : "AckermannDriveStamped"},
-            {"ackermann_cmd_topic" : "/pilsbot_velocity_controller/cmd_vel"}
-        ],
-        output={
-            'stdout': 'screen',
-            'stderr': 'screen',
-        }
-    )
+    # twist_2_acker = Node(
+    #     package='acker_diff_controller',
+    #     executable='cmd_vel_to_ackermann.py',
+    #     parameters=[
+    #         {"message_type" : "AckermannDriveStamped"},
+    #         {"ackermann_cmd_topic" : "/pilsbot_velocity_controller/cmd_vel"}
+    #     ],
+    #     output={
+    #         'stdout': 'screen',
+    #         'stderr': 'screen',
+    #     }
+    # )
 
 
     nodes = [
         joystick_in,
         joystick_mapper,
-        twist_2_acker
+        # twist_2_acker
     ]
 
-    return LaunchDescription(declared_launch_args + 
+    return LaunchDescription(declared_launch_args +
                             nodes)
