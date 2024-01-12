@@ -7,10 +7,10 @@ teleop_node:
     # this is for steering angle velocity.
     # a big number makes it more authorative about getting to setpoint
     # The scale is "about the angle error in rad" until stop
-    axis.steering_angle_velocity: 1
+    axis.steering_angle_velocity: 4  # is coupled with linear axis.
     scale.steering_angle_velocity: 0.0
     offset.steering_angle_velocity: 0.5
-    scale_turbo.steering_angle_velocity: 1.0
+    scale_turbo.steering_angle_velocity: .5
 
     # This is the steering angle in rad (about 0.015 rad in a degree)
     axis.steering_angle: 0
