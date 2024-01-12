@@ -87,8 +87,8 @@ private:
     struct {
       std::string tty_device = "/dev/ttyHoverboard";
       PID::Settings pid = PID::Settings {
-        .Kp = .28, .Ki = 1,  .Kd = .001,
-        .dt = 1, .max = 600, .min = NAN, //min/max is PWM (0-2000)
+        .Kp = .3, .Ki = 1.1,  .Kd = .001,
+        .dt = 1, .max = 1000, .min = NAN, //min/max is PWM (0-2000)
         .max_dv = 200, .overshoot_integral_adaptation = .5
       };
     } hoverboard;
