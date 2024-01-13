@@ -1,0 +1,26 @@
+teleop_node:
+  ros__parameters:
+    axis.linear: 5
+    scale.linear: .45
+    scale_turbo.linear: 0.7
+
+    # this is for steering angle velocity.
+    # a big number makes it less authorative about slowing down before getting to target
+    # The scale is "about the angle error in rad" until stop
+    axis.steering_angle_velocity: 5 # is coupled with linear axis.
+    scale.steering_angle_velocity: 0.0
+    offset.steering_angle_velocity: 1.0
+    scale_turbo.steering_angle_velocity: .5
+
+    # This is the steering angle in rad (about 0.015 rad in a degree)
+    axis.steering_angle: 0
+    scale.steering_angle: -1.3  # together with fine will result in max
+    scale_turbo.steering_angle: -0.7
+
+    # Optional: have a separate "fine" axis
+    axis.steering_angle_fine: 2
+    scale.steering_angle_fine: -0.4 # 1.4
+    scale_turbo.steering_angle_fine: -0.1
+
+    enable_button: 4  # L1 shoulder button
+    enable_turbo_button: 5  # R1 shoulder button
