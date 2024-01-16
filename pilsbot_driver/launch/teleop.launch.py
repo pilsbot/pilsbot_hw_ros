@@ -17,7 +17,9 @@ def generate_launch_description():
         description='Device file to hardware joystick'))
 
     declared_launch_args.append(DeclareLaunchArgument(
-        'joystick_conf', default_value=TextSubstitution(text='janosch_ps4.yaml'),
+        'joystick_conf', default_value=TextSubstitution(
+#        text='medion_0678.yaml'),
+        text='janosch_ps4.yaml'),
         description='Config value for joystick mapper'))
 
     joystick_mapping_config = PathJoinSubstitution(
