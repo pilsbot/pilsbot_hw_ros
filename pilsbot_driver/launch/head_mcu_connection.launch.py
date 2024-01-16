@@ -24,7 +24,7 @@ import xacro
 
 def generate_launch_description():
     example_parameters = [
-        {"serial_port": "/dev/ttySparkfunProMicro0"},
+        {"serial_port": "/dev/ttySparkfunProMicro"},
         {"publish_rate": 100},
         {"calibration_val" : [ # warning: Is noch hardcoded
   50182, -1.56601,
