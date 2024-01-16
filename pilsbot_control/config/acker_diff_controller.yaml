@@ -58,9 +58,9 @@ pilsbot_velocity_controller:
     linear.x.has_velocity_limits    : true
     linear.x.max_velocity           : 1.5  # m/s
     linear.x.has_acceleration_limits: true
-    linear.x.max_acceleration       : 0.5  # m/s^2
+    linear.x.max_acceleration       : 0.3  # m/s^2
     linear.x.has_jerk_limits        : false
-    linear.x.max_jerk               : 0.1  # m/s^3
+    linear.x.max_jerk               : 0.05  # m/s^3
 
     # 'z' is treated as steering wheel angular
     angle.z.has_position_limits      : true
@@ -68,7 +68,7 @@ pilsbot_velocity_controller:
     angle.z.max_angular_velocity     : 1. # rad/s
     angle.z.max_angular_acceleration : 5. # rad/s^2
     # difference in rad that PID sets from when forward motion should be stopped
-    angle.z.max_angle_setpoint_diff  : .85
+    angle.z.max_angle_setpoint_diff  : 1.2
 
 pilsbot_sensor_broadcaster:
   ros__parameters:
