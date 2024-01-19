@@ -24,6 +24,7 @@ teleop_node:
 
     enable_button: 4  # L1 shoulder button
     enable_turbo_button: 5  # R1 shoulder button
+    failsafe_delay_ms: 500
 
 joy_node:
   ros__parameters:

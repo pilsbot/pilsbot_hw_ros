@@ -36,8 +36,8 @@ def generate_launch_description():
 
     declared_launch_args.append(DeclareLaunchArgument(
         'joystick_conf', default_value=TextSubstitution(
-	text='janosch_ps4.yaml'),
-	#text='medion_0678.yaml'),
+        text='ps4.yaml'),
+        #text='medion_0678.yaml'),
         description='Config value for joystick mapper'))
 
 
@@ -60,6 +60,6 @@ def generate_launch_description():
     )
 
 
-    return LaunchDescription(declared_launch_args + 
-                            [included_pilsbot_launch] + 
+    return LaunchDescription(declared_launch_args +
+                            [included_pilsbot_launch] +
                             [included_teleop_launch])
