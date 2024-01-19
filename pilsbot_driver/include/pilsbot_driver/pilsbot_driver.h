@@ -98,8 +98,8 @@ private:
       unsigned update_period_ms = 5;
       CalibrationListSerialized calibration_val = {
         // TODO: proper config loading
-        50182, -1.56601,
-        31881, 0.0,
+        50702, -1.56601,
+        32358, 0.0,
         14017, 1.56601
       };
     } head_mcu;
