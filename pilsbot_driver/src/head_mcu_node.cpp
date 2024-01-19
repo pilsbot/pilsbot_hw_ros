@@ -140,6 +140,22 @@ class Head_MCU_node : public rclcpp::Node
           "Could not set terminal attributes!");
       perror("tcsetattr");
     }
+
+    // set blocking
+    int flags = fcntl(serial_fd_, F_GETFL, 0);
+    if(flags == -1)
+    {
+        RCLCPP_ERROR(this->get_logger(),
+          "Could not get FL attributes!");
+      perror("getFL");
+    }
+    flags &= ~O_NONBLOCK;
+    if(fcntl(serial_fd_, F_SETFL, flags) != 0)
+    {
+        RCLCPP_ERROR(this->get_logger(),
+          "Could not set FL attributes!");
+      perror("setFL");
+    }
   }
 
   void set_update_period_of_target(head_mcu::UpdatePeriodMs period_ms) {
@@ -186,7 +202,7 @@ class Head_MCU_node : public rclcpp::Node
       while(!stop_) {
         head_mcu::Frame frame;
         int ret = ::read(serial_fd_, &frame, sizeof(head_mcu::Frame));
-        if(ret == sizeof(head_mcu::Frame)) {
+        if(ret == sizeof(head_mcu::Frame) || ret == 0) {
           auto& s = state_.sensors;
           s.steering_angle_raw = frame.analog0;
           s.endstop_l = frame.digital0_8.as_bit.bit0;
