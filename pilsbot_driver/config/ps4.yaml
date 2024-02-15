@@ -10,7 +10,11 @@ teleop_node:
     axis.steering_angle_velocity: 5 # is coupled with linear axis.
     scale.steering_angle_velocity: 0.0
     offset.steering_angle_velocity: 1.0
-    scale_turbo.steering_angle_velocity: .5
+    scale_turbo.steering_angle_velocity: -.5 # see below
+    # steering angle velocity is the term of active steering vs passive steering
+    # (compare future paper about Sackermann).
+    # The faster we drive, the more authority has passive steering.
+    # So reduce active steering during turbo, which acts up on bigger deviations.
 
     # This is the steering angle in rad (about 0.015 rad in a degree)
     axis.steering_angle: 0
