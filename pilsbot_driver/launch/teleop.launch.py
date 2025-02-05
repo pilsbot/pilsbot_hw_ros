@@ -46,7 +46,7 @@ def generate_launch_description():
     joystick_mapper = Node(
         package='teleop_acker_joy',
         executable='teleop_node',
-        name='teleop_node',
+        name='teleop_acker_joy_node',
         parameters=[joystick_mapping_config],
         output={
             'stdout': 'screen',
