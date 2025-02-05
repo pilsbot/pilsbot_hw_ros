@@ -53,7 +53,7 @@ def generate_launch_description():
             'stderr': 'screen',
         },
         remappings=[
-            ('/cmd_vel', '/pilsbot_velocity_controller/cmd_vel'),
+            ('/cmd/vel', '/pilsbot_velocity_controller/cmd_vel'),
         ]
     )
 

@@ -31,7 +31,7 @@ teleop_acker_joy_node:
     failsafe_delay_ms: 500
 
     lights:
-      flash: 0
+      flash: 3
       headlight: 1
       turn_left: 2
-      turn_right: 3
+      turn_right: 0
