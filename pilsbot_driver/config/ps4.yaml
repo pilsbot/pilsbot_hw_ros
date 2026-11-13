@@ -1,7 +1,7 @@
 teleop_acker_joy_node:
   ros__parameters:
     axis.linear: 5
-    scale.linear: .45
+    scale.linear: .5
     scale_turbo.linear: 0.7
 
     # this is for steering angle velocity.
@@ -10,7 +10,7 @@ teleop_acker_joy_node:
     axis.steering_angle_velocity: 5 # is coupled with linear axis.
     scale.steering_angle_velocity: 0.0
     offset.steering_angle_velocity: 1.0
-    scale_turbo.steering_angle_velocity: -.5 # see below
+    scale_turbo.steering_angle_velocity: -.65 # see below
     # steering angle velocity is the term of active steering vs passive steering
     # (compare future paper about Sackermann).
     # The faster we drive, the more authority has passive steering.
@@ -23,8 +23,8 @@ teleop_acker_joy_node:
 
     # Optional: have a separate "fine" axis
     axis.steering_angle_fine: 2
-    scale.steering_angle_fine: -0.4 # 1.4
-    scale_turbo.steering_angle_fine: -0.1
+    scale.steering_angle_fine: -0.5 # 1.4
+    scale_turbo.steering_angle_fine: -0.12
 
     enable_button: 4  # L1 shoulder button
     enable_turbo_button: 5  # R1 shoulder button
