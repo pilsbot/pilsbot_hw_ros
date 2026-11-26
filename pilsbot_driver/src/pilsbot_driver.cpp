@@ -412,8 +412,11 @@ hardware_interface::return_type PilsbotDriver::read(
     // so the Head MCU thread does it instead of blocking the control loop.
     power_toggle_requested_ = true;
 
-
-    return hardware_interface::return_type::ERROR;
+    // Report OK, as Foxy effectively did (it ignored read() errors): an ERROR
+    // makes Humble stop the hardware, which also stops the Head MCU thread
+    // before it can press the power button, so a switched-off hoverboard
+    // would never come back.
+    return hardware_interface::return_type::OK;
   }
 
   // steering angle & co are updated in thread
@@ -705,9 +708,13 @@ void PilsbotDriver::read_from_head_mcu_continuously()
         "head_mcu serial connection thread started");
     while(!stop_)
     {
-      if (power_toggle_requested_.exchange(false))
+      if (power_toggle_requested_)
       {
         try_toggle_hoverboard_power();
+        // Drop the requests read() made during the ~1 s press; like Foxy,
+        // press again only if the hoverboard is still silent after it.
+        // Otherwise a hoverboard that just switched on gets switched off again.
+        power_toggle_requested_ = false;
       }
 
       // Wait for data with a timeout, so a silent Head MCU cannot block shutdown.
