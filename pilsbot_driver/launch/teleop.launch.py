@@ -18,8 +18,13 @@ def generate_launch_description():
         description='Robot profile: a name shipped with pilsbot_description, or a path.'))
 
     declared_launch_args.append(DeclareLaunchArgument(
-        'joystick_dev', default_value=TextSubstitution(text=''),
-        description='Device file to hardware joystick. Default: from the robot profile'))
+        'joystick_device_id', default_value=TextSubstitution(text=''),
+        description='SDL index of the gamepad (joy_node device_id). Default: from the robot profile'))
+
+    declared_launch_args.append(DeclareLaunchArgument(
+        'joystick_device_name', default_value=TextSubstitution(text=''),
+        description='SDL name of the gamepad; takes precedence over the index. '
+                    'Default: from the robot profile'))
 
     declared_launch_args.append(DeclareLaunchArgument(
         'joystick_conf', default_value=TextSubstitution(text=''),
@@ -31,8 +36,10 @@ def generate_launch_description():
 
 def launch_setup(context):
     robot_profile = profile.load(LaunchConfiguration('robot_profile').perform(context))
-    joystick_dev = (LaunchConfiguration('joystick_dev').perform(context)
-                    or robot_profile.devices['joystick'])
+    joystick_device_id = int(LaunchConfiguration('joystick_device_id').perform(context)
+                             or robot_profile.joystick_device_id)
+    joystick_device_name = (LaunchConfiguration('joystick_device_name').perform(context)
+                            or robot_profile.joystick_device_name)
     joystick_conf = (LaunchConfiguration('joystick_conf').perform(context)
                      or robot_profile.joystick_mapping + '.yaml')
 
@@ -48,7 +55,8 @@ def launch_setup(context):
         package='joy',
         executable='joy_node',
         parameters=[
-            {"dev" : joystick_dev},
+            # Humble's joy_node is SDL-based and has no 'dev' parameter.
+            {'device_id': joystick_device_id, 'device_name': joystick_device_name},
             {'coalesce_interval_ms' : 2}    # this might or might not work. Well.
             ],
         output={

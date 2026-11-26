@@ -35,8 +35,13 @@ def generate_launch_description():
         description='Robot profile: a name shipped with pilsbot_description, or a path.'))
 
     declared_launch_args.append(DeclareLaunchArgument(
-        'joystick_dev', default_value=TextSubstitution(text=''),
-        description='Device file to hardware joystick. Default: from the robot profile'))
+        'joystick_device_id', default_value=TextSubstitution(text=''),
+        description='SDL index of the gamepad (joy_node device_id). Default: from the robot profile'))
+
+    declared_launch_args.append(DeclareLaunchArgument(
+        'joystick_device_name', default_value=TextSubstitution(text=''),
+        description='SDL name of the gamepad; takes precedence over the index. '
+                    'Default: from the robot profile'))
 
     declared_launch_args.append(DeclareLaunchArgument(
         'joystick_conf', default_value=TextSubstitution(text=''),
@@ -58,7 +63,8 @@ def generate_launch_description():
     included_teleop_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([ThisLaunchFileDir(), '/teleop.launch.py']),
         launch_arguments={
-        "joystick_dev" : LaunchConfiguration("joystick_dev"),
+        "joystick_device_id" : LaunchConfiguration("joystick_device_id"),
+        "joystick_device_name" : LaunchConfiguration("joystick_device_name"),
         "joystick_conf" : LaunchConfiguration("joystick_conf"),
         "robot_profile" : LaunchConfiguration('robot_profile'),
         }.items()
