@@ -42,9 +42,9 @@ pilsbot_velocity_controller:
     publish_limited_velocity: true
 
     # Base frame_id
-    base_frame_id: base_link
+    base_frame_id: base_footprint  # rear axle centre on the ground (docs/adr/0002)
     allow_multiple_cmd_vel_publishers: true
-    odom_frame_id: 'odom_raw'
+    odom_frame_id: 'odom'
     #for testing:
     open_loop: false
     #yeah, why not?
