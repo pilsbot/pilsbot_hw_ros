@@ -3,6 +3,7 @@ import rclpy
 from rclpy.node import Node
 
 from pilsbot_driver_msgs.msg import SteeringAxleSensorsStamped
+from control_msgs.msg import DynamicJointState
 from std_msgs.msg import String
 
 import sys
@@ -53,21 +54,47 @@ class HeadMCUSub(Node):
             'head_mcu',
             self.listener_callback,
             10)
-        self.subscription  # prevent unused variable warning
+        # While the ros2_control driver owns the Head MCU, joint_state_broadcaster
+        # publishes its values on /dynamic_joint_states instead (docs/adr/0006).
+        self.dynamic_subscription = self.create_subscription(
+            DynamicJointState,
+            'dynamic_joint_states',
+            self.dynamic_callback,
+            10)
+
+    def dynamic_callback(self, msg):
+        values = {}
+        for name, interfaces in zip(msg.joint_names, msg.interface_values):
+            for interface, value in zip(interfaces.interface_names, interfaces.values):
+                values[name + '/' + interface] = value
+        if 'head_mcu/steering_angle_raw' not in values:
+            return
+        self.handle_sample(
+            values['head_mcu/steering_angle_raw'],
+            values.get('steering_axle_joint/position', float('nan')),
+            bool(values.get('head_mcu/endstop_l', 0.0)),
+            bool(values.get('head_mcu/endstop_r', 0.0)))
     
     def is_endstop_calibration_complete(self):
         return self.endstop_l_raw >= 0 and self.endstop_r_raw >= 0
 
     def listener_callback(self, msg):
-        self.current_raw = msg.sensors.steering_angle_raw
+        self.handle_sample(
+            msg.sensors.steering_angle_raw,
+            msg.sensors.steering_angle_normalized,
+            msg.sensors.endstop_l,
+            msg.sensors.endstop_r)
+
+    def handle_sample(self, raw, normalized, endstop_l, endstop_r):
+        self.current_raw = raw
         print("raw value: " + str(int(self.current_raw)) + " " +
-              "(old config: " +str(round(msg.sensors.steering_angle_normalized, 4)) +")", end="\r")
+              "(old config: " +str(round(normalized, 4)) +")", end="\r")
         if( not self.is_endstop_calibration_complete()):
-            if(msg.sensors.endstop_l):  #not inverted
+            if(endstop_l):  #not inverted
                 if(self.endstop_l_raw != self.current_raw):
                     self.endstop_l_raw = self.current_raw 
                     self.get_logger().info("got left endstop: " + str(self.current_raw))
-            if(msg.sensors.endstop_r):  #not inverted
+            if(endstop_r):  #not inverted
                 if(self.endstop_r_raw != self.current_raw):
                     self.endstop_r_raw = self.current_raw
                     self.get_logger().info("got right endstop: " + str(self.current_raw))
@@ -81,7 +108,8 @@ def main(args=None):
     endstop_l_angle_rad = -1.56601
     endstop_r_angle_rad = 1.56601	# measured 20.12.2021 pp
     
-    print("1.\tMake sure, that head_mcu_node is publishing /head_mcu/sensors/")
+    print("1.\tMake sure, that head_mcu_node is publishing /head_mcu, or the")
+    print("  \tros2_control driver with joint_state_broadcaster is running.")
     print("  \tduring reading, a 'raw value: [number]' should show.")
     print()
     print("2.\tAssuming location of left endstop at " +str(endstop_l_angle_rad) + " rad")

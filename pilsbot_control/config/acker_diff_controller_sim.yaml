@@ -7,8 +7,6 @@ controller_manager:
     pilsbot_joint_publisher:
       type: joint_state_broadcaster/JointStateBroadcaster
 
-    pilsbot_sensor_broadcaster:
-      type: pilsbot_sensor_broadcaster/PilsbotSensorBroadcaster
 
     pilsbot_velocity_controller:
       type: acker_diff_controller/AckerDiffController
@@ -73,9 +71,3 @@ pilsbot_velocity_controller:
     angle.z.max_angular_acceleration : 6. # rad/s^2
     # difference in rad that PID sets from when forward motion should be stopped
     angle.z.max_angle_setpoint_diff  : .85
-
-pilsbot_sensor_broadcaster:
-  ros__parameters:
-    hoverboard_api_publish_target: '/hoverboard_api'
-    head_mcu_publish_target: '/head_mcu'
-    steering_axle_name : 'steering_axle_joint'

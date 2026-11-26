@@ -1,16 +1,17 @@
 #pragma once
 
 #include "pid.h"
+#include <atomic>
 #include <chrono>
+#include <thread>
 
-#include "hardware_interface/base_interface.hpp"
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/handle.hpp"
 #include "hardware_interface/hardware_info.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
-#include "hardware_interface/types/hardware_interface_status_values.hpp"
 
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/state.hpp>
 
 #include <pilsbot_driver/linear_interpolation.hpp>
 
@@ -26,18 +27,20 @@ using linear_interpolator::CalibrationListSerialized;
 
 namespace pilsbot_driver
 {
-class PilsbotDriver : public hardware_interface::BaseInterface<hardware_interface::SystemInterface>
+class PilsbotDriver : public hardware_interface::SystemInterface
 {
   typedef LinearInterpolator<unsigned, double> PotInterpolator;
 public:
   ~PilsbotDriver();
   RCLCPP_SHARED_PTR_DEFINITIONS(PilsbotDriver)
 
-  hardware_interface::return_type configure(const hardware_interface::HardwareInfo &info) override;
-  hardware_interface::return_type start() override;
-  hardware_interface::return_type stop() override;
-  hardware_interface::return_type read() override;
-  hardware_interface::return_type write() override;
+  CallbackReturn on_init(const hardware_interface::HardwareInfo &info) override;
+  CallbackReturn on_activate(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_deactivate(const rclcpp_lifecycle::State & previous_state) override;
+  hardware_interface::return_type read(
+    const rclcpp::Time & time, const rclcpp::Duration & period) override;
+  hardware_interface::return_type write(
+    const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
   std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
   std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
@@ -61,6 +64,9 @@ private:
   bool try_setup_serial(const WhichSerial which);
 
   void try_toggle_hoverboard_power();
+
+  // Closes the serial connections and joins the Head MCU thread. Safe to call twice.
+  void shutdown_connections();
 
   struct WheelStatus {
     double commanded_turning_rate = 0;
@@ -116,7 +122,10 @@ private:
   HoverboardSensors hoverboard_sensors_;
 
   // head_mcu threading
-  std::atomic<bool> stop_;
+  std::atomic<bool> stop_{true};
+  // Set from read() on a hoverboard timeout; the Head MCU thread performs the
+  // (blocking, ~1 s) power toggle so the control loop is never put to sleep.
+  std::atomic<bool> power_toggle_requested_{false};
   PotInterpolator interpolator_;
   SteeringAxleSensors axle_sensors_;
   std::thread reading_function_;
@@ -125,7 +134,7 @@ private:
 
   rclcpp::Time last_serial_read;   // last time read from serial
   rclcpp::Time last_write_tick;  // last time a 'write' tick happened
-  HoverboardAPI *api;
+  HoverboardAPI *api = nullptr;
 };
 
 }

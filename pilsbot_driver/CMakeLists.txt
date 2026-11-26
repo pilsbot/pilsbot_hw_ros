@@ -16,6 +16,8 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(controller_manager REQUIRED)
 find_package(hardware_interface REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(pilsbot_driver_msgs REQUIRED)
@@ -47,7 +49,9 @@ add_library(pilsbot_driver
 ament_target_dependencies(pilsbot_driver
                           controller_manager #diagnostic_msgs
                           hardware_interface
-                          rclcpp)
+                          rclcpp
+                          rclcpp_lifecycle
+                          pluginlib)
 
 # testing hoverboard API
 add_executable(hoverboard-api-testing

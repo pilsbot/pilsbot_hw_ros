@@ -5,9 +5,11 @@
 #include <array>
 #include <unordered_map>
 
+#if __cplusplus > 201402L
+#include <optional>  // std::nullopt_t is used from C++17 on
+#endif
 #if __cplusplus > 201703L
 #include <filesystem>
-#include <optional>
 #endif
 
 namespace QuickArgParserInternals {

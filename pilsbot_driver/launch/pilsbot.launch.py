@@ -16,6 +16,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -33,7 +34,7 @@ def generate_launch_description():
         Usually the argument is not set, it enables use of a custom setup'))
 
     declared_launch_args.append(DeclareLaunchArgument(
-        'descritption_file', default_value=TextSubstitution(text='pilsbot.urdf.xacro'),
+        'description_file', default_value=TextSubstitution(text='pilsbot.urdf.xacro'),
         description='URDF/XACRO description file with the robot.'))
 
     declared_launch_args.append(DeclareLaunchArgument(
@@ -44,7 +45,7 @@ def generate_launch_description():
     # intialise args
     controller_config = LaunchConfiguration('controller_config')
     runtime_config_package = LaunchConfiguration('runtime_config_package')
-    description_file = LaunchConfiguration('descritption_file')
+    description_file = LaunchConfiguration('description_file')
     description_package = LaunchConfiguration('description_package')
 
     # Get URDF via xacro
@@ -67,7 +68,8 @@ def generate_launch_description():
         ]
     )
 
-    robot_description = {'robot_description': robot_description_content}
+    robot_description = {
+        'robot_description': ParameterValue(robot_description_content, value_type=str)}
 
     pilsbot_acker_diff_controller_config = PathJoinSubstitution(
         [
@@ -98,26 +100,19 @@ def generate_launch_description():
 
     spawn_pb_controller = Node(
         package="controller_manager",
-        executable="spawner.py",
+        executable="spawner",
         arguments=["pilsbot_velocity_controller"],
         output="screen",
     )
     spawn_jsb_controller = Node(
         package="controller_manager",
-        executable="spawner.py",
+        executable="spawner",
         arguments=["joint_state_publisher"],
         output="screen",
     )
 
-    spawn_ss_publisher_controller = Node(
-        package="controller_manager",
-        executable="spawner.py",
-        arguments=['pilsbot_sensor_broadcaster'],
-        output="screen",
-    )
-
     nodes = [control_node, 
-        spawn_pb_controller, spawn_jsb_controller, spawn_ss_publisher_controller,
+        spawn_pb_controller, spawn_jsb_controller,
         robot_state_publisher_node]
 
     return LaunchDescription(declared_launch_args + nodes)

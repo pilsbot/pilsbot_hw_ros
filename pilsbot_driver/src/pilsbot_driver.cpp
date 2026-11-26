@@ -4,6 +4,7 @@
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
 
 #include <fcntl.h>
+#include <poll.h>
 #include <termios.h>
 #include <arpa/inet.h>  //ntoh
 #include <unistd.h>
@@ -19,7 +20,7 @@ using std::placeholders::_1;
 
 PilsbotDriver::~PilsbotDriver()
 {
-  stop();
+  shutdown_connections();
   delete api;
 }
 
@@ -41,8 +42,8 @@ PilsbotDriver::export_state_interfaces()
              "StateIF: interpreting joint %s as powered left wheel", joint.name.c_str());
         have_single_left_wheel = true;
       } else {
-        RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
-             "StateIF: Ignoring additional left wheel %s", joint.name.c_str());
+        RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
+             "StateIF: unpowered left wheel %s mirrors the powered left wheel", joint.name.c_str());
       }
       state_interfaces.emplace_back(hardware_interface::StateInterface(
         joint.name, hardware_interface::HW_IF_POSITION, &wheels_[0].curr_position));
@@ -56,8 +57,8 @@ PilsbotDriver::export_state_interfaces()
              "StateIF: interpreting joint %s as powered right wheel", joint.name.c_str());
         have_single_right_wheel = true;
       } else {
-        RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
-             "StateIF: Ignoring additional right wheel %s", joint.name.c_str());
+        RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
+             "StateIF: unpowered right wheel %s mirrors the powered right wheel", joint.name.c_str());
       }
       state_interfaces.emplace_back(hardware_interface::StateInterface(
         joint.name, hardware_interface::HW_IF_POSITION, &wheels_[1].curr_position));
@@ -68,7 +69,7 @@ PilsbotDriver::export_state_interfaces()
       if(!have_single_steering_axle) {
         RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
              "StateIF: interpreting joint %s as steering_axle joint", joint.name.c_str());
-        have_single_right_wheel = true;
+        have_single_steering_axle = true;
       } else {
         RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
              "StateIF: Ignoring additional steering_axle %s", joint.name.c_str());
@@ -101,7 +102,7 @@ PilsbotDriver::export_state_interfaces()
         } else {
           RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
                "Not offering interface %s in sensor %s",
-               interface.name, sens.name);
+               interface.name.c_str(), sens.name.c_str());
         }
       }
     } else if (sens.name == "head_mcu") {
@@ -121,12 +122,12 @@ PilsbotDriver::export_state_interfaces()
         else {
           RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
                "Not offering interface %s in sensor %s",
-               interface.name, sens.name);
+               interface.name.c_str(), sens.name.c_str());
         }
       }
     }else {
       RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-           "Not offering sensor %s", sens.name);
+           "Not offering sensor %s", sens.name.c_str());
     }
   }
 
@@ -174,13 +175,13 @@ PilsbotDriver::export_command_interfaces()
 }
 
 
-hardware_interface::return_type PilsbotDriver::configure(const hardware_interface::HardwareInfo &info)
+hardware_interface::CallbackReturn PilsbotDriver::on_init(const hardware_interface::HardwareInfo &info)
 {
   clock = rclcpp::Clock();
 
-  if (configure_default(info) != hardware_interface::return_type::OK)
+  if (SystemInterface::on_init(info) != CallbackReturn::SUCCESS)
   {
-    return hardware_interface::return_type::ERROR;
+    return CallbackReturn::ERROR;
   }
   else
   {
@@ -201,19 +202,19 @@ hardware_interface::return_type PilsbotDriver::configure(const hardware_interfac
              "calibration values could not be loaded!");
     }
 
-    return hardware_interface::return_type::OK;
+    return CallbackReturn::SUCCESS;
   }
 }
 
-hardware_interface::return_type PilsbotDriver::start()
+hardware_interface::CallbackReturn PilsbotDriver::on_activate(const rclcpp_lifecycle::State &)
 {
   if (!try_setup_serial(WhichSerial::head_mcu))
   {
-    return hardware_interface::return_type::ERROR;
+    return CallbackReturn::ERROR;
   }
   if (!try_setup_serial(WhichSerial::hoverboard))
   {
-    return hardware_interface::return_type::ERROR;
+    return CallbackReturn::ERROR;
   }
 
   if (hoverboard_fd < 0 || head_mcu_fd < 0)
@@ -221,7 +222,7 @@ hardware_interface::return_type PilsbotDriver::start()
     RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
         "Filedescriptor to hoverboard (%d) or head_mcu (%d) invalid!",
         hoverboard_fd, head_mcu_fd);
-    return hardware_interface::return_type::ERROR;
+    return CallbackReturn::ERROR;
   }
 
   last_serial_read = clock.now();
@@ -236,15 +237,27 @@ hardware_interface::return_type PilsbotDriver::start()
     wheel = WheelStatus();
   }
 
-  return hardware_interface::return_type::OK;
+  return CallbackReturn::SUCCESS;
 }
 
-hardware_interface::return_type PilsbotDriver::stop()
+hardware_interface::CallbackReturn PilsbotDriver::on_deactivate(const rclcpp_lifecycle::State &)
+{
+  shutdown_connections();
+  return CallbackReturn::SUCCESS;
+}
+
+void PilsbotDriver::shutdown_connections()
 {
   stop_ = true;
+  // The thread polls with a timeout, so it notices stop_ even if the Head MCU is silent.
+  if (reading_function_.joinable())
+  {
+    reading_function_.join();
+  }
   if (hoverboard_fd != -1)
   {
     close(hoverboard_fd);
+    hoverboard_fd = -1;
     if ((clock.now() - last_serial_read) <= rclcpp::Duration(1, 0))
     {
       // assume a connection if below one second
@@ -254,12 +267,12 @@ hardware_interface::return_type PilsbotDriver::stop()
   if (head_mcu_fd != -1)
   {
     close(head_mcu_fd);
+    head_mcu_fd = -1;
   }
-
-  return hardware_interface::return_type::OK;
 }
 
-hardware_interface::return_type PilsbotDriver::read()
+hardware_interface::return_type PilsbotDriver::read(
+  const rclcpp::Time &, const rclcpp::Duration &)
 {
 
   if (hoverboard_fd == -1) {
@@ -295,13 +308,14 @@ hardware_interface::return_type PilsbotDriver::read()
   if ((clock.now() - last_serial_read) > rclcpp::Duration(1, 0))
   {
     RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
-        "hoverboard: Timeout reading from serial %s. Last connection: %d",
+        "hoverboard: Timeout reading from serial %s. Last connection: %f",
         params_.hoverboard.tty_device.c_str(), last_serial_read.seconds());
     //TODO: Is there a better way for controller to know this return value (ERROR)?
     axle_sensors_.steering_angle_normalized = NAN;
 
-    // Try restarting / starting the thing.
-    try_toggle_hoverboard_power();
+    // Try restarting / starting the thing. The toggle takes about a second,
+    // so the Head MCU thread does it instead of blocking the control loop.
+    power_toggle_requested_ = true;
 
 
     return hardware_interface::return_type::ERROR;
@@ -334,7 +348,8 @@ hardware_interface::return_type PilsbotDriver::read()
 
 }
 
-hardware_interface::return_type PilsbotDriver::write()
+hardware_interface::return_type PilsbotDriver::write(
+  const rclcpp::Time &, const rclcpp::Duration &)
 {
   if (hoverboard_fd == -1) {
     RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
@@ -470,6 +485,7 @@ bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which)
       perror("tcsetattr");
     }
 
+    delete api;  // from a previous activation
     api = new HoverboardAPI(serialWrite);
   }
   else if (which == WhichSerial::head_mcu)
@@ -516,7 +532,7 @@ bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which)
         "head_mcu: was non-blocking socket...?");
     }
     // set blocking (we rely on that to sync)
-    if (!fcntl(head_mcu_fd, F_SETFL, fl & ~O_NONBLOCK))
+    if (fcntl(head_mcu_fd, F_SETFL, fl & ~O_NONBLOCK) == -1)
     {
       RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
           "head_mcu: Could not set non_block attributes!");
@@ -566,7 +582,7 @@ bool PilsbotDriver::set_head_mcu_pin(const bool val)
 
 void PilsbotDriver::try_toggle_hoverboard_power()
 {
-  if (head_mcu_fd) // if head_mcu connection is somewhat enabled
+  if (head_mcu_fd != -1) // if head_mcu connection is somewhat enabled
   {
     set_head_mcu_pin(true);
     rclcpp::sleep_for(std::chrono::milliseconds(500));
@@ -591,6 +607,19 @@ void PilsbotDriver::read_from_head_mcu_continuously()
         "head_mcu serial connection thread started");
     while(!stop_)
     {
+      if (power_toggle_requested_.exchange(false))
+      {
+        try_toggle_hoverboard_power();
+      }
+
+      // Wait for data with a timeout, so a silent Head MCU cannot block shutdown.
+      struct pollfd pfd{head_mcu_fd, POLLIN, 0};
+      const int ready = ::poll(&pfd, 1, 100 /* ms */);
+      if (ready == 0)
+      {
+        continue;
+      }
+
       head_mcu::Frame frame;
       auto ret = ::read(head_mcu_fd, &frame, sizeof(head_mcu::Frame));
       if(ret == sizeof(head_mcu::Frame))
@@ -613,7 +642,7 @@ void PilsbotDriver::read_from_head_mcu_continuously()
         {
           auto val = fcntl(head_mcu_fd, F_GETFL, 0);
           RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 500,
-            "Head_mcu: serial connection closed or something: %d %s GETFL: 0x%X",
+            "Head_mcu: serial connection closed or something: %zd %s GETFL: 0x%X",
             ret, strerror(errno), val);
         }
         break; // break from inner succeeding-read loop

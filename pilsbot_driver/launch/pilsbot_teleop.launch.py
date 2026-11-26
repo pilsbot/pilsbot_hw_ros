@@ -22,7 +22,7 @@ def generate_launch_description():
         Usually the argument is not set, it enables use of a custom setup'))
 
     declared_launch_args.append(DeclareLaunchArgument(
-        'descritption_file', default_value=TextSubstitution(text='pilsbot.urdf.xacro'),
+        'description_file', default_value=TextSubstitution(text='pilsbot.urdf.xacro'),
         description='URDF/XACRO description file with the robot.'))
 
     declared_launch_args.append(DeclareLaunchArgument(
@@ -46,7 +46,7 @@ def generate_launch_description():
         launch_arguments={
         "controller_config" : LaunchConfiguration('controller_config'),
         "runtime_config_package" : LaunchConfiguration('runtime_config_package'),
-        "description_file" : LaunchConfiguration('descritption_file'),
+        "description_file" : LaunchConfiguration('description_file'),
         "description_package" : LaunchConfiguration('description_package')
         }.items()
     )
