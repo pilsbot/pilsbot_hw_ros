@@ -1,11 +1,12 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.actions import IncludeLaunchDescription
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 from launch.substitutions import ThisLaunchFileDir
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from pilsbot_description import profile
 
 
 def generate_launch_description():
@@ -13,20 +14,33 @@ def generate_launch_description():
     declared_launch_args = []
 
     declared_launch_args.append(DeclareLaunchArgument(
-        'joystick_dev', default_value=TextSubstitution(text='/dev/input/js0'),
-        description='Device file to hardware joystick'))
+        'robot_profile', default_value=TextSubstitution(text='pilsbot'),
+        description='Robot profile: a name shipped with pilsbot_description, or a path.'))
 
     declared_launch_args.append(DeclareLaunchArgument(
-        'joystick_conf', default_value=TextSubstitution(
-        #text='medion_0678.yaml'),
-        text='ps4.yaml'),
-        description='Config value for joystick mapper'))
+        'joystick_dev', default_value=TextSubstitution(text=''),
+        description='Device file to hardware joystick. Default: from the robot profile'))
+
+    declared_launch_args.append(DeclareLaunchArgument(
+        'joystick_conf', default_value=TextSubstitution(text=''),
+        description='Mapping file in pilsbot_driver/config, e.g. medion_0678.yaml. '
+                    'Default: from the robot profile'))
+
+    return LaunchDescription(declared_launch_args + [OpaqueFunction(function=launch_setup)])
+
+
+def launch_setup(context):
+    robot_profile = profile.load(LaunchConfiguration('robot_profile').perform(context))
+    joystick_dev = (LaunchConfiguration('joystick_dev').perform(context)
+                    or robot_profile.devices['joystick'])
+    joystick_conf = (LaunchConfiguration('joystick_conf').perform(context)
+                     or robot_profile.joystick_mapping + '.yaml')
 
     joystick_mapping_config = PathJoinSubstitution(
         [
             FindPackageShare("pilsbot_driver"),
             "config",
-            LaunchConfiguration('joystick_conf'),
+            joystick_conf,
         ]
     )
 
@@ -34,7 +48,7 @@ def generate_launch_description():
         package='joy',
         executable='joy_node',
         parameters=[
-            {"dev" : LaunchConfiguration('joystick_dev')},
+            {"dev" : joystick_dev},
             {'coalesce_interval_ms' : 2}    # this might or might not work. Well.
             ],
         output={
@@ -71,11 +85,8 @@ def generate_launch_description():
     # )
 
 
-    nodes = [
+    return [
         joystick_in,
         joystick_mapper,
         # twist_2_acker
     ]
-
-    return LaunchDescription(declared_launch_args +
-                            nodes)

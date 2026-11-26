@@ -12,37 +12,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
-from ament_index_python.packages import get_package_share_directory
-
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-
-import xacro
+from pilsbot_description import profile
 
 
 def generate_launch_description():
-    example_parameters = [
-        {"serial_port": "/dev/ttySparkfunProMicro"},
-        {"publish_rate": 100},
-        {"calibration_val" : [ # warning: Is noch hardcoded
-  50182, -1.56601,
-  31881, 0.0,
-  14017, 1.56601,
-            ]
-        }
-    ]
+    return LaunchDescription([
+        DeclareLaunchArgument(
+            'robot_profile', default_value='pilsbot',
+            description='Robot profile: a name shipped with pilsbot_description, or a path.'),
+        OpaqueFunction(function=launch_setup),
+    ])
 
+
+def launch_setup(context):
+    robot_profile = profile.load(LaunchConfiguration('robot_profile').perform(context))
     mcu_node = Node(
       package='pilsbot_driver',
       executable='head_mcu_node',
-      parameters=example_parameters,
+      parameters=[
+          {"serial_port": robot_profile.devices['head_mcu']},
+          {"publish_rate": 100},
+          {"calibration_val": robot_profile.steering_calibration_flat()},
+      ],
       output={
           'stdout': 'screen',
           'stderr': 'screen',
         },
     )
-    return LaunchDescription([
-        mcu_node,
-    ])
+    return [mcu_node]

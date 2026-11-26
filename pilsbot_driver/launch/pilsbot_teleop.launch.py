@@ -31,14 +31,17 @@ def generate_launch_description():
         is not set, it enables use of a custom description.'))
 
     declared_launch_args.append(DeclareLaunchArgument(
-        'joystick_dev', default_value=TextSubstitution(text='/dev/input/js0'),
-        description='Device file to hardware joystick'))
+        'robot_profile', default_value=TextSubstitution(text='pilsbot'),
+        description='Robot profile: a name shipped with pilsbot_description, or a path.'))
 
     declared_launch_args.append(DeclareLaunchArgument(
-        'joystick_conf', default_value=TextSubstitution(
-        text='ps4.yaml'),
-        #text='medion_0678.yaml'),
-        description='Config value for joystick mapper'))
+        'joystick_dev', default_value=TextSubstitution(text=''),
+        description='Device file to hardware joystick. Default: from the robot profile'))
+
+    declared_launch_args.append(DeclareLaunchArgument(
+        'joystick_conf', default_value=TextSubstitution(text=''),
+        description='Mapping file in pilsbot_driver/config, e.g. medion_0678.yaml. '
+                    'Default: from the robot profile'))
 
 
     included_pilsbot_launch = IncludeLaunchDescription(
@@ -47,7 +50,8 @@ def generate_launch_description():
         "controller_config" : LaunchConfiguration('controller_config'),
         "runtime_config_package" : LaunchConfiguration('runtime_config_package'),
         "description_file" : LaunchConfiguration('description_file'),
-        "description_package" : LaunchConfiguration('description_package')
+        "description_package" : LaunchConfiguration('description_package'),
+        "robot_profile" : LaunchConfiguration('robot_profile'),
         }.items()
     )
 
@@ -56,6 +60,7 @@ def generate_launch_description():
         launch_arguments={
         "joystick_dev" : LaunchConfiguration("joystick_dev"),
         "joystick_conf" : LaunchConfiguration("joystick_conf"),
+        "robot_profile" : LaunchConfiguration('robot_profile'),
         }.items()
     )
 

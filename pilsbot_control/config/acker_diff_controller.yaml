@@ -17,15 +17,9 @@ pilsbot_velocity_controller:
     pose_covariance_diagonal : [0.001, 0.001, 1000000.0, 1000000.0, 1000000.0, 1000.0]
     twist_covariance_diagonal: [0.001, 0.001, 1000000.0, 1000000.0, 1000000.0, 1000.0]
 
-    # Wheel separation and diameter. These are both optional.
-    # diff_drive_controller will attempt to read either one or both from the
-    # URDF if not specified as a parameter
-    # FIXME: Somehow this does not work anymore... Config von gazebo rausgenommen, glaube ich
-    # wheel left/right distance
-    wheel_separation : 0.62
-    wheel_radius : 0.125
-    #wheel front/back distance
-    wheel_base_distance : 0.67
+    # wheel_separation, wheel_radius and wheel_base_distance come from the
+    # robot profile (pilsbot_description/profiles), passed in by
+    # pilsbot_driver/launch/pilsbot.launch.py.
 
     # Wheel separation and radius multipliers
     wheel_separation_multiplier: 1.0 # default: 1.0

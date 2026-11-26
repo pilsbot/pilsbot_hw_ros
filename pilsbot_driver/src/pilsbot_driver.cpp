@@ -9,6 +9,11 @@
 #include <arpa/inet.h>  //ntoh
 #include <unistd.h>
 
+#include <cmath>
+#include <optional>
+#include <sstream>
+#include <string>
+
 int serialWrite(unsigned char* data, int len)
 {
   return ::write(hoverboard_fd, data, len);
@@ -17,6 +22,35 @@ int serialWrite(unsigned char* data, int len)
 namespace pilsbot_driver
 {
 using std::placeholders::_1;
+
+namespace
+{
+// Parses "raw:angle,raw:angle,..." into the interpolator's flat pair list.
+std::optional<CalibrationListSerialized> parse_calibration(const std::string & text)
+{
+  CalibrationListSerialized values;
+  std::stringstream pairs(text);
+  std::string pair;
+  while (std::getline(pairs, pair, ',')) {
+    const auto colon = pair.find(':');
+    if (colon == std::string::npos) {
+      return std::nullopt;
+    }
+    try {
+      size_t used_raw = 0, used_angle = 0;
+      const std::string raw = pair.substr(0, colon), angle = pair.substr(colon + 1);
+      values.push_back(std::stod(raw, &used_raw));
+      values.push_back(std::stod(angle, &used_angle));
+      if (used_raw != raw.size() || used_angle != angle.size()) {
+        return std::nullopt;
+      }
+    } catch (const std::exception &) {
+      return std::nullopt;
+    }
+  }
+  return values;
+}
+}  // namespace
 
 PilsbotDriver::~PilsbotDriver()
 {
@@ -190,18 +224,54 @@ hardware_interface::CallbackReturn PilsbotDriver::on_init(const hardware_interfa
     wheels_.resize(2, WheelStatus());   // hardcoded: only support two controllable wheels
     hoverboard_sensors_ = HoverboardSensors();
 
-    /*
-     * TODO: Load parameters from Hardware-Info (URDF)
-     * And for deep hardware params (serial port, baud, ...)
-     * load a yaml via rclcpp yaml-parser referenced in urdf
-     */
+    // Ports, wheel radius and steering calibration come from the robot
+    // profile through the URDF's <hardware> parameters. Baud rates, timing
+    // and the PID keep their defaults in Params.
     params_ = Params();
+    const auto logger = rclcpp::get_logger("PilsbotDriver");
+    const auto param = [&](const std::string & name) -> std::optional<std::string> {
+      const auto it = info_.hardware_parameters.find(name);
+      if (it == info_.hardware_parameters.end() || it->second.empty()) {
+        RCLCPP_FATAL(logger, "Missing hardware parameter '%s' (robot profile)", name.c_str());
+        return std::nullopt;
+      }
+      return it->second;
+    };
 
-    if(!interpolator_.deserialize(params_.head_mcu.calibration_val)) {
-      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-             "calibration values could not be loaded!");
+    const auto hoverboard_tty = param("hoverboard_tty_device");
+    const auto head_mcu_tty = param("head_mcu_tty_device");
+    const auto wheel_radius = param("wheel_radius");
+    const auto calibration = param("steering_calibration");
+    if (!hoverboard_tty || !head_mcu_tty || !wheel_radius || !calibration) {
+      return CallbackReturn::ERROR;
+    }
+    params_.hoverboard.tty_device = *hoverboard_tty;
+    params_.head_mcu.tty_device = *head_mcu_tty;
+
+    try {
+      size_t used = 0;
+      params_.wheel_radius = std::stod(*wheel_radius, &used);
+      if (used != wheel_radius->size() || !(params_.wheel_radius > 0)) {
+        throw std::invalid_argument("not a positive number");
+      }
+    } catch (const std::exception &) {
+      RCLCPP_FATAL(logger, "Hardware parameter 'wheel_radius' is not a positive number: '%s'",
+        wheel_radius->c_str());
+      return CallbackReturn::ERROR;
     }
 
+    const auto calibration_values = parse_calibration(*calibration);
+    if (!calibration_values || !interpolator_.deserialize(*calibration_values)) {
+      RCLCPP_FATAL(logger,
+        "Hardware parameter 'steering_calibration' must hold at least two distinct "
+        "'raw:angle' pairs separated by commas, got '%s'", calibration->c_str());
+      return CallbackReturn::ERROR;
+    }
+    params_.head_mcu.calibration_val = *calibration_values;
+
+    RCLCPP_INFO(logger, "Hoverboard on %s, head MCU on %s, wheel radius %g m",
+      params_.hoverboard.tty_device.c_str(), params_.head_mcu.tty_device.c_str(),
+      params_.wheel_radius);
     return CallbackReturn::SUCCESS;
   }
 }

@@ -89,9 +89,9 @@ private:
   };
 
   struct Params {
-    double wheel_radius = 0.125;
+    double wheel_radius = 0;  // from the robot profile
     struct {
-      std::string tty_device = "/dev/ttyHoverboard";
+      std::string tty_device;  // from the robot profile
       PID::Settings pid = PID::Settings {
         .Kp = .3, .Ki = 1.1,  .Kd = .001,
         .dt = 1, .max = 1000, .min = NAN, //min/max is PWM (0-2000)
@@ -99,15 +99,10 @@ private:
       };
     } hoverboard;
     struct {
-      std::string tty_device = "/dev/ttyHeadMCU";
+      std::string tty_device;  // from the robot profile
       unsigned baudrate = 115200;
       unsigned update_period_ms = 5;
-      CalibrationListSerialized calibration_val = {
-        // TODO: proper config loading
-        50702, -1.56601,
-        32358, 0.0,
-        14017, 1.56601
-      };
+      CalibrationListSerialized calibration_val;  // from the robot profile
     } head_mcu;
     unsigned serial_connect_retries = 3;
                                 // Minimum calculated speed to have the wheels moving.

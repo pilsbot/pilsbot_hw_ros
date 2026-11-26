@@ -24,6 +24,8 @@
   <depend>realtime_tools</depend>
   <depend>rclcpp</depend>
   <depend>pilsbot_driver_msgs</depend>
+  <exec_depend>pilsbot_description</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
   <exec_depend>acker_diff_controller</exec_depend>
   <exec_depend>control_msgs</exec_depend>
   <exec_depend>joint_state_broadcaster</exec_depend>
