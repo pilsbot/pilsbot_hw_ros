@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+import sys
+
+from pilsbot_hardware_activator.node import main
+
+sys.exit(main())

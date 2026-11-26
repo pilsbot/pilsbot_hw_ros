@@ -14,6 +14,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 find_package(controller_manager REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -69,6 +70,18 @@ ament_target_dependencies(head_mcu_node
   rclcpp
   pilsbot_driver_msgs) 
 
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_inactive_hardware test/test_inactive_hardware.cpp)
+  target_link_libraries(test_inactive_hardware pilsbot_driver util)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_hardware_activator test/test_hardware_activator.py)
+endif()
+
+# Keeps the hardware and its controllers active (see pilsbot.launch.py).
+ament_python_install_package(pilsbot_hardware_activator)
+install(PROGRAMS scripts/hardware_activator DESTINATION lib/${PROJECT_NAME})
 
 pluginlib_export_plugin_description_file(hardware_interface pilsbot_driver.xml)
 

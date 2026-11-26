@@ -37,6 +37,8 @@ public:
   CallbackReturn on_init(const hardware_interface::HardwareInfo &info) override;
   CallbackReturn on_activate(const rclcpp_lifecycle::State & previous_state) override;
   CallbackReturn on_deactivate(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_cleanup(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_error(const rclcpp_lifecycle::State & previous_state) override;
   hardware_interface::return_type read(
     const rclcpp::Time & time, const rclcpp::Duration & period) override;
   hardware_interface::return_type write(
@@ -118,6 +120,8 @@ private:
 
   // head_mcu threading
   std::atomic<bool> stop_{true};
+  // Humble calls read()/write() on inactive hardware too; they do nothing until on_activate succeeded.
+  std::atomic<bool> active_{false};
   // Set from read() on a hoverboard timeout; the Head MCU thread performs the
   // (blocking, ~1 s) power toggle so the control loop is never put to sleep.
   std::atomic<bool> power_toggle_requested_{false};

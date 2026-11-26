@@ -24,6 +24,9 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 from pilsbot_description import profile
 
+# <ros2_control name=...> in pilsbot_description's URDF.
+HARDWARE_COMPONENT = 'PilsbotSystem'
+
 
 def generate_launch_description():
 
@@ -107,6 +110,10 @@ def launch_setup(context):
         parameters=[robot_description,
                     pilsbot_acker_diff_controller_config,
                     overrides.name,
+                    # Start the hardware inactive: Humble's controller manager aborts
+                    # if activation fails at startup (e.g. hoverboard switched off).
+                    # hardware_activator activates it as soon as the devices answer.
+                    {'hardware_components_initial_state.inactive': [HARDWARE_COMPONENT]},
                     ],
         output={
             'stdout': 'screen',
@@ -121,19 +128,29 @@ def launch_setup(context):
         parameters=[robot_description]
     )
 
+    # Controllers are loaded inactive; the activator activates them once the
+    # hardware is active, and again whenever the hardware dropped out.
     spawn_pb_controller = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["pilsbot_velocity_controller"],
+        arguments=["pilsbot_velocity_controller", "--inactive"],
         output="screen",
     )
     spawn_jsb_controller = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["joint_state_publisher"],
+        arguments=["joint_state_publisher", "--inactive"],
+        output="screen",
+    )
+    hardware_activator = Node(
+        package="pilsbot_driver",
+        executable="hardware_activator",
+        parameters=[{'hardware_component': HARDWARE_COMPONENT,
+                     'controllers': ['joint_state_publisher', 'pilsbot_velocity_controller']}],
         output="screen",
     )
 
     return [control_node,
             spawn_pb_controller, spawn_jsb_controller,
+            hardware_activator,
             robot_state_publisher_node]

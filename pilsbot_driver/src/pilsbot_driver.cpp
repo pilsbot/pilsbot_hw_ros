@@ -278,12 +278,15 @@ hardware_interface::CallbackReturn PilsbotDriver::on_init(const hardware_interfa
 
 hardware_interface::CallbackReturn PilsbotDriver::on_activate(const rclcpp_lifecycle::State &)
 {
+  // On failure, close whatever was opened so a later activation attempt starts clean.
   if (!try_setup_serial(WhichSerial::head_mcu))
   {
+    shutdown_connections();
     return CallbackReturn::ERROR;
   }
   if (!try_setup_serial(WhichSerial::hoverboard))
   {
+    shutdown_connections();
     return CallbackReturn::ERROR;
   }
 
@@ -292,6 +295,7 @@ hardware_interface::CallbackReturn PilsbotDriver::on_activate(const rclcpp_lifec
     RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
         "Filedescriptor to hoverboard (%d) or head_mcu (%d) invalid!",
         hoverboard_fd, head_mcu_fd);
+    shutdown_connections();
     return CallbackReturn::ERROR;
   }
 
@@ -307,11 +311,29 @@ hardware_interface::CallbackReturn PilsbotDriver::on_activate(const rclcpp_lifec
     wheel = WheelStatus();
   }
 
+  active_ = true;
   return CallbackReturn::SUCCESS;
 }
 
 hardware_interface::CallbackReturn PilsbotDriver::on_deactivate(const rclcpp_lifecycle::State &)
 {
+  active_ = false;
+  shutdown_connections();
+  return CallbackReturn::SUCCESS;
+}
+
+// Humble handles a read()/write() error by calling on_error and leaving the
+// hardware unconfigured without on_deactivate, so close everything here too.
+hardware_interface::CallbackReturn PilsbotDriver::on_error(const rclcpp_lifecycle::State &)
+{
+  active_ = false;
+  shutdown_connections();
+  return CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn PilsbotDriver::on_cleanup(const rclcpp_lifecycle::State &)
+{
+  active_ = false;
   shutdown_connections();
   return CallbackReturn::SUCCESS;
 }
@@ -344,6 +366,9 @@ void PilsbotDriver::shutdown_connections()
 hardware_interface::return_type PilsbotDriver::read(
   const rclcpp::Time &, const rclcpp::Duration &)
 {
+  if (!active_) {
+    return hardware_interface::return_type::OK;
+  }
 
   if (hoverboard_fd == -1) {
     RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
@@ -421,6 +446,9 @@ hardware_interface::return_type PilsbotDriver::read(
 hardware_interface::return_type PilsbotDriver::write(
   const rclcpp::Time &, const rclcpp::Duration &)
 {
+  if (!active_) {
+    return hardware_interface::return_type::OK;
+  }
   if (hoverboard_fd == -1) {
     RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
         "hoverboard: Attempt to write on closed serial");
