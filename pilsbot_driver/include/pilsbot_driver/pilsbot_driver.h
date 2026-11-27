@@ -67,8 +67,14 @@ private:
 
   void try_toggle_hoverboard_power();
 
+  enum class PowerButton
+  {
+    press_if_connected,  // clean shutdown: switch the hoverboard off if it talked within 1 s
+    leave                // error or failed activation: never touch the power button
+  };
+
   // Closes the serial connections and joins the Head MCU thread. Safe to call twice.
-  void shutdown_connections();
+  void shutdown_connections(PowerButton power_button);
 
   struct WheelStatus {
     double commanded_turning_rate = 0;
