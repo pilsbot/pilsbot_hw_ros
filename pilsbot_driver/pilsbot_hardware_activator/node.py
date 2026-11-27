@@ -4,7 +4,8 @@ Keep the Pilsbot hardware and its controllers active.
 Every `period` seconds: read the hardware and controller states from the
 controller manager, then act on the Plan (see plan.py). One round runs at a
 time; activating the hardware blocks for a few seconds while the driver
-retries its serial ports.
+retries its serial ports. A call the controller manager doesn't answer within
+`call_timeout` seconds ends the round, so the next one starts afresh.
 """
 import sys
 
@@ -19,6 +20,8 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
+from pilsbot_hardware_activator.call import call
+from pilsbot_hardware_activator.call import CallTimeout
 from pilsbot_hardware_activator.plan import plan
 
 # Log a still-failing activation about once a minute, not every round.
@@ -27,17 +30,21 @@ _FAILURE_LOG_EVERY = 12
 
 class HardwareActivator(Node):
 
-    def __init__(self):
-        super().__init__('hardware_activator')
+    def __init__(self, **kwargs):
+        super().__init__('hardware_activator', **kwargs)
         self.hardware = self.declare_parameter('hardware_component', 'PilsbotSystem').value
         self.controllers = tuple(self.declare_parameter(
             'controllers', ['joint_state_publisher', 'pilsbot_velocity_controller']).value)
         period = self.declare_parameter('period', 5.0).value
         cm = self.declare_parameter('controller_manager', '/controller_manager').value
+        # Activating the hardware takes a few seconds (serial retries); no answer
+        # within this time means the controller manager died or hangs.
+        self.call_timeout = self.declare_parameter('call_timeout', 30.0).value
 
-        # The timer's coroutine awaits these clients; in the node's default
-        # (mutually exclusive) group their responses could never be processed.
-        clients = ReentrantCallbackGroup()
+        # The timer's coroutine awaits these clients (and their deadline timers);
+        # in the node's default (mutually exclusive) group their responses could
+        # never be processed.
+        self.clients_group = clients = ReentrantCallbackGroup()
         self.list_hardware = self.create_client(
             ListHardwareComponents, f'{cm}/list_hardware_components', callback_group=clients)
         self.set_hardware_state = self.create_client(
@@ -65,13 +72,13 @@ class HardwareActivator(Node):
         self.busy = True
         try:
             await self._round()
+        except CallTimeout as e:
+            self.get_logger().warn(f'{e} (controller manager dead or hanging?); retrying')
         finally:
             self.busy = False
 
     async def _call(self, client, request):
-        if not client.service_is_ready():
-            return None
-        return await client.call_async(request)
+        return await call(self, client, request, self.call_timeout, self.clients_group)
 
     async def _round(self):
         hardware = await self._call(self.list_hardware, ListHardwareComponents.Request())
