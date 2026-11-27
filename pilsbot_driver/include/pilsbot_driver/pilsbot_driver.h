@@ -135,10 +135,10 @@ private:
   SteeringAxleSensors axle_sensors_;
   std::thread reading_function_;
 
-  rclcpp::Clock clock;
+  rclcpp::Clock clock{RCL_STEADY_TIME};  // internal durations only, never wall time
 
-  rclcpp::Time last_serial_read;   // last time read from serial
-  rclcpp::Time last_write_tick;  // last time a 'write' tick happened
+  rclcpp::Time last_serial_read{0, 0, RCL_STEADY_TIME};  // last time read from serial
+  rclcpp::Time last_write_tick{0, 0, RCL_STEADY_TIME};  // last time a 'write' tick happened
   HoverboardAPI *api = nullptr;
 };
 

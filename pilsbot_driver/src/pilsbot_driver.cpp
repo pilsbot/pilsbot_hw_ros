@@ -214,7 +214,13 @@ PilsbotDriver::export_command_interfaces()
 
 hardware_interface::CallbackReturn PilsbotDriver::on_init(const hardware_interface::HardwareInfo &info)
 {
-  clock = rclcpp::Clock();
+  // Steady time for all internal durations (hoverboard timeout, "connected"
+  // check, PID dt): the Nano has no RTC, so the system clock is stepped by
+  // chrony/NTP/GNSS after boot. A forward step would fake a timeout (power
+  // press while driving), a backward step would hide a real one.
+  clock = rclcpp::Clock(RCL_STEADY_TIME);
+  last_serial_read = clock.now();
+  last_write_tick = clock.now();
 
   if (SystemInterface::on_init(info) != CallbackReturn::SUCCESS)
   {
@@ -413,8 +419,8 @@ hardware_interface::return_type PilsbotDriver::read(
   if ((clock.now() - last_serial_read) > rclcpp::Duration(1, 0))
   {
     RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
-        "hoverboard: Timeout reading from serial %s. Last connection: %f",
-        params_.hoverboard.tty_device.c_str(), last_serial_read.seconds());
+        "hoverboard: Timeout reading from serial %s. Last data %.1f s ago",
+        params_.hoverboard.tty_device.c_str(), (clock.now() - last_serial_read).seconds());
     //TODO: Is there a better way for controller to know this return value (ERROR)?
     axle_sensors_.steering_angle_normalized = NAN;
 
