@@ -17,13 +17,15 @@ import tempfile
 import yaml
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, Shutdown
+from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction, RegisterEventHandler, Shutdown
 from launch.event_handlers import OnProcessExit
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 from pilsbot_description import profile
+
+DEFAULT_RUNTIME_CONFIG_PACKAGE = 'pilsbot_control'
 
 # <ros2_control name=...> in pilsbot_description's URDF.
 HARDWARE_COMPONENT = 'PilsbotSystem'
@@ -39,9 +41,12 @@ def generate_launch_description():
         description='The controller configuration you want to use.'))
 
     declared_launch_args.append(DeclareLaunchArgument(
-        'runtime_config_package', default_value=TextSubstitution(text='pilsbot_control'),
-        description='Package with the controller\'s configuration in "config" folder. \
-        Usually the argument is not set, it enables use of a custom setup'))
+        'runtime_config_package',
+        default_value=TextSubstitution(text=DEFAULT_RUNTIME_CONFIG_PACKAGE),
+        description='Package with the controller\'s configuration in "config" folder. '
+                    'Usually the argument is not set, it enables use of a custom setup. '
+                    'Only hardware:=real uses it: with hardware:=gazebo the description '
+                    'takes controller_config from pilsbot_control.'))
 
     declared_launch_args.append(DeclareLaunchArgument(
         'description_file', default_value=TextSubstitution(text='pilsbot.urdf.xacro'),
@@ -199,5 +204,11 @@ def launch_setup(context):
     # which also activates the hardware itself: the activator then only
     # activates the controllers.
     if hardware == 'gazebo':
+        ignored = runtime_config_package.perform(context)
+        if ignored != DEFAULT_RUNTIME_CONFIG_PACKAGE:
+            # Until pilsbot/pilsbot_description#7 takes a package for it.
+            common.insert(0, LogInfo(msg=(
+                f'hardware:=gazebo ignores runtime_config_package:={ignored}; the '
+                f'controller configuration comes from {DEFAULT_RUNTIME_CONFIG_PACKAGE}.')))
         return common
     return [control_node, shutdown_without_controller_manager] + common

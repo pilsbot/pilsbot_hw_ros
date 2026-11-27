@@ -8,7 +8,7 @@ import pytest
 import yaml
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.actions import OpaqueFunction, RegisterEventHandler
+from launch.actions import LogInfo, OpaqueFunction, RegisterEventHandler
 from launch.utilities import normalize_to_list_of_substitutions, perform_substitutions
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -45,6 +45,15 @@ def expand(launch_file, **arguments):
 def evaluate(context, substitutions):
     return perform_substitutions(context, normalize_to_list_of_substitutions(substitutions))
 
+
+def log_messages(context, actions):
+    return [evaluate(context, a.msg) for a in actions if isinstance(a, LogInfo)]
+
+
+# The helpers below read name-mangled private attributes of Humble's launch /
+# launch_ros (Node._Node__arguments, Node._Node__parameters,
+# OnActionEventBase._OnActionEventBase__action_matcher): Humble has no public
+# accessors for them. Check them first when porting to a newer distro.
 
 def nodes(actions):
     return {node.node_executable: node for node in actions if isinstance(node, Node)}
@@ -128,6 +137,26 @@ def test_gazebo_passes_the_controller_parameters_to_xacro():
     controller = overrides['pilsbot_velocity_controller']['ros__parameters']
     assert controller['wheel_separation'] == pytest.approx(0.62)
     assert controller['wheel_base_distance'] == pytest.approx(0.67)
+
+
+def test_gazebo_says_that_runtime_config_package_is_ignored():
+    context, actions = expand('pilsbot.launch.py', hardware='gazebo',
+                              runtime_config_package='my_config')
+
+    [message] = log_messages(context, actions)
+    assert 'runtime_config_package' in message
+    assert 'my_config' in message
+    assert 'pilsbot_control' in message
+
+
+@pytest.mark.parametrize('arguments', [
+    {'hardware': 'gazebo'},
+    {'hardware': 'real', 'runtime_config_package': 'my_config'},
+])
+def test_no_message_when_runtime_config_package_is_used_or_default(arguments):
+    context, actions = expand('pilsbot.launch.py', **arguments)
+
+    assert log_messages(context, actions) == []
 
 
 # --- hardware:=real (the default) -------------------------------------------
