@@ -52,9 +52,9 @@ pilsbot_velocity_controller:
 
     # 'z' is treated as steering wheel angular
     angle.z.has_position_limits      : true
-    angle.z.max_angle                : 1.45	# rad, so ~83 Deg
+    angle.z.max_angle                : 1.45 # rad, so ~83 Deg
     angle.z.max_angular_velocity     : 1. # rad/s
     angle.z.max_angular_acceleration : 5. # rad/s^2
     # stop forward motion while |steering setpoint - measured angle| exceeds this [rad]
     # (only while the steering loop is active, pils_control#5)
-    angle.z.max_angle_setpoint_diff  : 1.2
+    angle.z.max_angle_setpoint_diff  : 0.85
