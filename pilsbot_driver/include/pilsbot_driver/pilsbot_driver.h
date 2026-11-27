@@ -67,8 +67,15 @@ private:
 
   void try_toggle_hoverboard_power();
 
+  enum class PowerButton
+  {
+    press_if_connected,  // clean shutdown: switch the hoverboard off if it talked
+                         // since the activation and within the last 1 s
+    leave                // error or failed activation: never touch the power button
+  };
+
   // Closes the serial connections and joins the Head MCU thread. Safe to call twice.
-  void shutdown_connections();
+  void shutdown_connections(PowerButton power_button);
 
   struct WheelStatus {
     double commanded_turning_rate = 0;
@@ -125,6 +132,10 @@ private:
   // Set from read() on a hoverboard timeout; the Head MCU thread performs the
   // (blocking, ~1 s) power toggle so the control loop is never put to sleep.
   std::atomic<bool> power_toggle_requested_{false};
+  // Set once the hoverboard sent bytes since on_activate. Without it a
+  // shutdown within 1 s of activation would press power although the
+  // hoverboard never talked (and may be off: the press would switch it on).
+  std::atomic<bool> hoverboard_seen_{false};
   PotInterpolator interpolator_;
   SteeringAxleSensors axle_sensors_;
   std::thread reading_function_;
