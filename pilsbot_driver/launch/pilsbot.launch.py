@@ -95,12 +95,6 @@ def launch_setup(context):
         }, overrides)
 
     xacro_hardware_args = [f"hardware:={hardware}"]
-    if hardware == 'real':
-        # Transition: pilsbot_description's use_fake_hardware defaults to true
-        # (Gazebo Classic) until pilsbot/pilsbot_description#6 replaces it with
-        # `hardware`. xacro ignores undeclared arguments, so this line is
-        # harmless afterwards; drop it once #6 is merged.
-        xacro_hardware_args += [" ", "use_fake_hardware:=false"]
     if hardware == 'gazebo':
         # gz_ros2_control reads the controller parameters from the URDF.
         xacro_hardware_args += [" ", f"controller_overrides:={overrides.name}"]
