@@ -97,14 +97,71 @@ TEST_F(ActiveHardware, on_error_does_not_press_the_power_button)
   EXPECT_EQ(power_button.presses(), 0);
 }
 
+TEST_F(ActiveHardware, a_persistent_read_error_runs_into_the_timeout)
+{
+  // A dead link that makes every read() fail (not just EAGAIN) is caught by
+  // the 1 s timeout like a silent one: power request, still OK.
+  const int driver_fd = fake_devices::driver_fd_of(hoverboard_);
+  ASSERT_GE(driver_fd, 0);
+  const int write_only = ::open("/dev/null", O_WRONLY);
+  ASSERT_EQ(::dup2(write_only, driver_fd), driver_fd);
+  ::close(write_only);
+
+  PowerButtonWatch power_button(head_mcu_);
+  const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(1300);
+  while (std::chrono::steady_clock::now() < until) {
+    ASSERT_EQ(driver_.read(now, period), hardware_interface::return_type::OK);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+  EXPECT_TRUE(power_button.wait_for_presses(1, 1500));
+}
+
 TEST_F(ActiveHardware, a_clean_deactivation_switches_a_connected_hoverboard_off)
 {
+  fake_devices::send(hoverboard_, hoverboard_hall_message(0, 0, 2));
+  ASSERT_EQ(driver_.read(now, period), hardware_interface::return_type::OK);
   PowerButtonWatch power_button(head_mcu_);
   EXPECT_EQ(driver_.on_deactivate(rclcpp_lifecycle::State()),
     hardware_interface::CallbackReturn::SUCCESS);
   EXPECT_TRUE(power_button.wait_for_presses(1, 500));
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
   EXPECT_EQ(power_button.presses(), 1);
+}
+
+TEST_F(ActiveHardware, deactivating_before_the_hoverboard_ever_talked_does_not_press)
+{
+  // Within 1 s of activation, but the hoverboard never sent a byte: it may
+  // be off, and a press would switch it on at shutdown.
+  PowerButtonWatch power_button(head_mcu_);
+  EXPECT_EQ(driver_.on_deactivate(rclcpp_lifecycle::State()),
+    hardware_interface::CallbackReturn::SUCCESS);
+  std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+  EXPECT_EQ(power_button.presses(), 0);
+}
+
+TEST_F(ActiveHardware, cleanup_before_the_hoverboard_ever_talked_does_not_press)
+{
+  PowerButtonWatch power_button(head_mcu_);
+  EXPECT_EQ(driver_.on_cleanup(rclcpp_lifecycle::State()),
+    hardware_interface::CallbackReturn::SUCCESS);
+  std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+  EXPECT_EQ(power_button.presses(), 0);
+}
+
+TEST(SilentHoverboard, destroying_active_hardware_that_never_heard_the_hoverboard_does_not_press)
+{
+  SilentDevice hoverboard;
+  SilentDevice head_mcu;
+  PowerButtonWatch power_button(head_mcu);
+  {
+    pilsbot_driver::PilsbotDriver driver;
+    ASSERT_EQ(driver.on_init(pilsbot_hardware_on(hoverboard.name, head_mcu.name)),
+      hardware_interface::CallbackReturn::SUCCESS);
+    ASSERT_EQ(driver.on_activate(rclcpp_lifecycle::State()),
+      hardware_interface::CallbackReturn::SUCCESS);
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+  EXPECT_EQ(power_button.presses(), 0);
 }
 
 TEST(MissingHoverboard, activation_fails_without_pressing_the_power_button)
