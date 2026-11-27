@@ -302,8 +302,11 @@ hardware_interface::CallbackReturn PilsbotDriver::on_activate(const rclcpp_lifec
     return CallbackReturn::ERROR;
   }
 
+  // last_serial_read starts the 1 s timeout; it does not mean the hoverboard
+  // talked (hoverboard_seen_ does).
   last_serial_read = clock.now();
   last_write_tick = clock.now();
+  hoverboard_seen_ = false;
 
   // ok, go on little bird
   stop_ = false;
@@ -357,10 +360,10 @@ void PilsbotDriver::shutdown_connections(const PowerButton power_button)
   {
     close(hoverboard_fd);
     hoverboard_fd = -1;
-    if (power_button == PowerButton::press_if_connected &&
+    if (power_button == PowerButton::press_if_connected && hoverboard_seen_ &&
       (clock.now() - last_serial_read) <= rclcpp::Duration(1, 0))
     {
-      // assume a connection if below one second
+      // The hoverboard talked within the last second, so it is on.
       try_toggle_hoverboard_power();
     }
   }
@@ -378,36 +381,40 @@ hardware_interface::return_type PilsbotDriver::read(
     return hardware_interface::return_type::OK;
   }
 
-  if (hoverboard_fd == -1) {
-    RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
-        "Filedescriptor to hoverboard invalid!");
-    return hardware_interface::return_type::ERROR;
+  const int fd = hoverboard_fd;
+  if (fd == -1) {
+    // Only possible while on_deactivate/on_error/on_cleanup runs: it clears
+    // active_ and then closes the port, after this cycle saw active_. An
+    // ERROR here would make Humble call on_error on the control thread
+    // while the deactivation still joins the Head MCU thread.
+    RCLCPP_WARN_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
+        "hoverboard: serial port closed while shutting down; skipping read");
+    return hardware_interface::return_type::OK;
   }
   api->requestRead(HoverboardAPI::Codes::sensHall);
   api->requestRead(HoverboardAPI::Codes::sensElectrical);
 
   unsigned char c;
   int i = 0, r = 0;
-  while ((r = ::read(hoverboard_fd, &c, 1)) > 0 && i++ < max_length) {
+  while ((r = ::read(fd, &c, 1)) > 0 && i++ < max_length) {
     api->protocolPush(c);
   }
+  const int read_errno = errno;
+  const bool read_failed = r < 0 && read_errno != EAGAIN;
 
   if (i > 0) {
     last_serial_read = clock.now();
+    hoverboard_seen_ = true;
   }
 
-  if (r < 0 && errno != EAGAIN)
+  if (read_failed)
   {
     RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
-        "hoverboard: Reading from serial %s failed: %d",
-        params_.hoverboard.tty_device.c_str(), r);
-    perror("hoverboard read");
-
-    //TODO: Is there a better way for controller to know this return value (ERROR)?
-    axle_sensors_.steering_angle_normalized = NAN;
+        "hoverboard: Reading from serial %s failed: %s",
+        params_.hoverboard.tty_device.c_str(), strerror(read_errno));
     // Report OK, as Foxy did (it ignored read() errors): an ERROR makes Humble
-    // stop the hardware. A dead link is caught by the 1 s timeout below.
-    return hardware_interface::return_type::OK;
+    // stop the hardware. A link that keeps failing runs into the 1 s timeout
+    // below, like a silent one.
   }
 
   if ((clock.now() - last_serial_read) > rclcpp::Duration(1, 0))
@@ -426,6 +433,13 @@ hardware_interface::return_type PilsbotDriver::read(
     // makes Humble stop the hardware, which also stops the Head MCU thread
     // before it can press the power button, so a switched-off hoverboard
     // would never come back.
+    return hardware_interface::return_type::OK;
+  }
+
+  if (read_failed)
+  {
+    // No trustworthy data this cycle (as Foxy): unknown steering, keep the speeds.
+    axle_sensors_.steering_angle_normalized = NAN;
     return hardware_interface::return_type::OK;
   }
 
@@ -465,9 +479,10 @@ hardware_interface::return_type PilsbotDriver::write(
     return hardware_interface::return_type::OK;
   }
   if (hoverboard_fd == -1) {
-    RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
-        "hoverboard: Attempt to write on closed serial");
-    return hardware_interface::return_type::ERROR;
+    // A deactivation closed the port after this cycle saw active_ (see read()).
+    RCLCPP_WARN_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
+        "hoverboard: serial port closed while shutting down; skipping write");
+    return hardware_interface::return_type::OK;
   }
 
   auto& pid_settings = params_.hoverboard.pid;
