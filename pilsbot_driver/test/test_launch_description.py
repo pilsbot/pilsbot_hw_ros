@@ -192,11 +192,12 @@ def test_real_passes_hardware_real_to_xacro():
     xacro = xacro_arguments(context, actions)
     assert xacro['hardware'] == 'real'
     assert 'controller_overrides' not in xacro
+    # pilsbot_description#6 removed use_fake_hardware; nothing passes it.
+    assert 'use_fake_hardware' not in xacro
 
 
 def test_real_selects_the_robots_driver_in_the_installed_description():
-    # Until pilsbot_description knows `hardware`, use_fake_hardware defaults
-    # to true there and would select Gazebo Classic's GazeboSystem.
+    # hardware:=real alone must select the driver (pilsbot_description#6).
     context, actions = expand('pilsbot.launch.py', hardware='real')
 
     urdf = robot_description(actions).perform(context)
