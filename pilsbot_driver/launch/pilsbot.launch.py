@@ -17,7 +17,8 @@ import tempfile
 import yaml
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, Shutdown
+from launch.event_handlers import OnProcessExit
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -150,7 +151,18 @@ def launch_setup(context):
         output="screen",
     )
 
-    return [control_node,
+    # Without the controller manager nothing drives or stops the robot. End the
+    # whole launch so the container exits: on the robot, useful-scripts'
+    # startall.bash then runs disable_motors.bash and systemd starts the stack
+    # again. startall.bash disables the motors from an EXIT trap
+    # (pilsbot/useful-scripts#2), so that happens whatever the exit code;
+    # before that trap, its `set -e` skipped disable_motors.bash unless the
+    # stack exited 0. A Shutdown makes `ros2 launch` exit 0 either way.
+    shutdown_without_controller_manager = RegisterEventHandler(OnProcessExit(
+        target_action=control_node,
+        on_exit=[Shutdown(reason='the controller manager (ros2_control_node) exited')]))
+
+    return [control_node, shutdown_without_controller_manager,
             spawn_pb_controller, spawn_jsb_controller,
             hardware_activator,
             robot_state_publisher_node]
