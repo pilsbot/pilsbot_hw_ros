@@ -3,6 +3,7 @@
 #include "pid.h"
 #include <atomic>
 #include <chrono>
+#include <mutex>
 #include <thread>
 
 #include "hardware_interface/system_interface.hpp"
@@ -65,13 +66,15 @@ private:
   bool set_update_period_of_head_mcu(head_mcu::UpdatePeriodMs period_ms);
 
   // Opens and configures a serial device, trying `attempts` times 1 s apart.
-  bool try_setup_serial(const WhichSerial which, unsigned attempts);
+  // `quiet` leaves logging a failure to open the device to the caller.
+  bool try_setup_serial(const WhichSerial which, unsigned attempts, bool quiet = false);
   bool try_setup_serial(const WhichSerial which)
   {
     return try_setup_serial(which, params_.serial_connect_retries);
   }
 
-  // Steering angle and endstops become NaN: unknown, the controller halts the wheels.
+  // Head MCU thread: steering angle and endstops become NaN (unknown, the
+  // controller halts the wheels) from the next read() on.
   void forget_head_mcu_values();
 
   // Sleeps up to `duration`, returning early once stop_ is set.
@@ -102,8 +105,8 @@ private:
       double txBufferLevel = 0;
   };
 
-  // Written by the Head MCU thread. NaN = unknown: before the first frame
-  // after an activation and while the Head MCU is disconnected.
+  // Head MCU values. NaN = unknown: before the first frame after an
+  // activation and while the Head MCU is disconnected.
   struct SteeringAxleSensors {
       double steering_angle_raw = NAN;
       double endstop_l = NAN;     // stupid state interface only allows double
@@ -151,7 +154,20 @@ private:
   // hoverboard never talked (and may be off: the press would switch it on).
   std::atomic<bool> hoverboard_seen_{false};
   PotInterpolator interpolator_;
+  // Exported state values, written only by read() (control thread) and
+  // on_activate. read() copies head_mcu_latest_ into them each cycle and
+  // then sets steering_angle_normalized (the steering_axle_joint position)
+  // to NaN while the hoverboard link is down. The controller's update()
+  // runs right after read(), so it sees:
+  //   steering NaN = steering unknown (Head MCU lost) or hoverboard link down
+  //   (1 s timeout or a read error in this cycle).
+  // steering_angle_raw and the endstops are NaN only while the Head MCU is lost.
   SteeringAxleSensors axle_sensors_;
+  // Latest values from the Head MCU thread. read() takes them with try_lock
+  // (never blocking the control loop) as one consistent frame; if the thread
+  // holds the lock, that cycle keeps the previous values.
+  SteeringAxleSensors head_mcu_latest_;
+  std::mutex head_mcu_latest_mutex_;
   std::thread reading_function_;
 
   rclcpp::Clock clock{RCL_STEADY_TIME};  // internal durations only, never wall time

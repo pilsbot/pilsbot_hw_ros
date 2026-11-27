@@ -2,8 +2,14 @@
 // steering angle and the endstops read NaN, so the controller halts the
 // wheels instead of steering on a stale angle, and the driver keeps
 // reconnecting until it is stopped.
+//
+// The exported values change only in read() (as in the control loop, where
+// update() runs right after it): read() copies the Head MCU thread's latest
+// values and then sets the steering angle to NaN while the hoverboard link
+// is down. The tests therefore feed the hoverboard and call read().
 
 #include <gtest/gtest.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -25,6 +31,7 @@
 
 namespace
 {
+using fake_devices::hoverboard_hall_message;
 using fake_devices::pilsbot_hardware_on;
 using fake_devices::SilentDevice;
 using fake_devices::state_value;
@@ -100,7 +107,17 @@ protected:
       hardware_interface::CallbackReturn::SUCCESS);
   }
 
+  // One control cycle with a talking hoverboard: the exported values are
+  // updated from the Head MCU thread's latest ones.
+  void cycle()
+  {
+    fake_devices::send(hoverboard_, hoverboard_hall_message(0, 0, ci_++));
+    ASSERT_EQ(driver_.read(rclcpp::Time(1, 0), rclcpp::Duration(0, 20000000)),
+      hardware_interface::return_type::OK);
+  }
+
   double steering() {return state_value(states_, "steering_axle_joint/position");}
+  double steering_raw() {return state_value(states_, "head_mcu/steering_angle_raw");}
   double endstop_l() {return state_value(states_, "head_mcu/endstop_l");}
   double endstop_r() {return state_value(states_, "head_mcu/endstop_r");}
 
@@ -111,6 +128,7 @@ protected:
     while (std::chrono::steady_clock::now() < deadline) {
       head_mcu_.send_frame(raw_straight_ahead, false, false);
       std::this_thread::sleep_for(20ms);
+      cycle();
       if (!std::isnan(steering())) {
         return true;
       }
@@ -122,6 +140,7 @@ protected:
   {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline) {
+      cycle();
       if (std::isnan(steering()) && std::isnan(endstop_l()) && std::isnan(endstop_r())) {
         return true;
       }
@@ -131,6 +150,7 @@ protected:
   }
 
   SilentDevice hoverboard_;
+  uint8_t ci_{2};
   PluggableHeadMcu head_mcu_;
   pilsbot_driver::PilsbotDriver driver_;
   std::vector<hardware_interface::StateInterface> states_;
@@ -210,6 +230,7 @@ TEST_F(HeadMcu, unplugged_mid_run_reads_nan_and_reconnects_after_replug)
 
   // Longer than the old 3 reconnect attempts: the driver must still be trying.
   std::this_thread::sleep_for(4500ms);
+  cycle();
   EXPECT_TRUE(std::isnan(steering()));
 
   head_mcu_.plug();
@@ -251,4 +272,49 @@ TEST_F(HeadMcu, an_interrupted_poll_does_not_block_shutdown)
     head_mcu_.send_frame(raw_straight_ahead, false, false);  // unblock it for the teardown
   }
   deactivation.wait();
+}
+
+TEST_F(HeadMcu, steering_is_nan_while_the_hoverboard_link_is_down)
+{
+  activate();
+  ASSERT_TRUE(steering_known_within(1s));
+
+  // Hoverboard silent for more than the 1 s timeout; the Head MCU still talks.
+  std::this_thread::sleep_for(1100ms);
+  head_mcu_.send_frame(raw_straight_ahead, false, false);
+  std::this_thread::sleep_for(30ms);
+  ASSERT_EQ(driver_.read(rclcpp::Time(1, 0), rclcpp::Duration(0, 20000000)),
+    hardware_interface::return_type::OK);
+  // A Head MCU frame after read() must not bring the angle back before the
+  // controller's update() in this cycle has seen it.
+  head_mcu_.send_frame(raw_straight_ahead, false, false);
+  std::this_thread::sleep_for(30ms);
+  EXPECT_TRUE(std::isnan(steering()));
+  // The Head MCU's own sensor values stay valid.
+  EXPECT_EQ(steering_raw(), raw_straight_ahead);
+  EXPECT_EQ(endstop_l(), 0.0);
+
+  // The hoverboard talks again: the steering angle is back.
+  EXPECT_TRUE(steering_known_within(3s));
+  EXPECT_DOUBLE_EQ(steering(), 0.0);
+}
+
+TEST_F(HeadMcu, steering_is_nan_for_a_cycle_with_a_hoverboard_read_error)
+{
+  activate();
+  ASSERT_TRUE(steering_known_within(1s));
+
+  // The next hoverboard read() fails with EBADF (see test_hoverboard_failures).
+  const int driver_fd = fake_devices::driver_fd_of(hoverboard_);
+  ASSERT_GE(driver_fd, 0);
+  const int write_only = ::open("/dev/null", O_WRONLY);
+  ASSERT_EQ(::dup2(write_only, driver_fd), driver_fd);
+  ::close(write_only);
+
+  ASSERT_EQ(driver_.read(rclcpp::Time(1, 0), rclcpp::Duration(0, 20000000)),
+    hardware_interface::return_type::OK);
+  head_mcu_.send_frame(raw_straight_ahead, false, false);
+  std::this_thread::sleep_for(30ms);
+  EXPECT_TRUE(std::isnan(steering()));
+  EXPECT_EQ(steering_raw(), raw_straight_ahead);
 }

@@ -315,8 +315,9 @@ hardware_interface::CallbackReturn PilsbotDriver::on_activate(const rclcpp_lifec
   hoverboard_seen_ = false;
 
   // Unknown until the Head MCU thread reads the first frame; no stale
-  // values from a previous activation.
+  // values from a previous activation. The thread is not running yet.
   forget_head_mcu_values();
+  axle_sensors_ = SteeringAxleSensors();
 
   // ok, go on little bird
   stop_ = false;
@@ -391,6 +392,15 @@ hardware_interface::return_type PilsbotDriver::read(
     return hardware_interface::return_type::OK;
   }
 
+  // Head MCU values for this cycle; the steering angle may be overridden
+  // with NaN below (see axle_sensors_ in the header).
+  {
+    std::unique_lock<std::mutex> lock(head_mcu_latest_mutex_, std::try_to_lock);
+    if (lock.owns_lock()) {
+      axle_sensors_ = head_mcu_latest_;
+    }
+  }
+
   const int fd = hoverboard_fd;
   if (fd == -1) {
     // Only possible while on_deactivate/on_error/on_cleanup runs: it clears
@@ -432,10 +442,9 @@ hardware_interface::return_type PilsbotDriver::read(
     RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
         "hoverboard: Timeout reading from serial %s. Last data %.1f s ago",
         params_.hoverboard.tty_device.c_str(), (clock.now() - last_serial_read).seconds());
-    // NaN only until the Head MCU thread's next frame (within ~5 ms): the
-    // steering value always reflects the Head MCU and is NaN only while that
-    // is disconnected. A hoverboard timeout shows in the stopped wheels and
-    // this log, not in the steering angle.
+    // Hoverboard link down: steering NaN for every cycle until it talks
+    // again, so the controller halts (the thread's frames only reach the
+    // exported values through the copy at the top of read()).
     axle_sensors_.steering_angle_normalized = NAN;
 
     // Try restarting / starting the thing. The toggle takes about a second,
@@ -451,12 +460,13 @@ hardware_interface::return_type PilsbotDriver::read(
 
   if (read_failed)
   {
-    // No trustworthy data this cycle (as Foxy): unknown steering, keep the speeds.
+    // No trustworthy data this cycle (as Foxy): steering NaN for this cycle,
+    // the wheel speeds keep their last values.
     axle_sensors_.steering_angle_normalized = NAN;
     return hardware_interface::return_type::OK;
   }
 
-  // steering angle & co are updated in thread
+  // steering angle & co: copied from the Head MCU thread's values above
 
   // sensory
   hoverboard_sensors_.voltage = api->getBatteryVoltage();
@@ -538,7 +548,8 @@ void PilsbotDriver::tick()
 }
 
 
-bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which, const unsigned attempts)
+bool PilsbotDriver::try_setup_serial(
+  const PilsbotDriver::WhichSerial which, const unsigned attempts, const bool quiet)
 {
   unsigned retries = 0;
   bool still_unsuccessful = true;
@@ -567,22 +578,24 @@ bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which, con
   {
     if ((*fd = ::open(path, O_RDWR | O_NOCTTY | O_NDELAY)) < 0)
     {
-      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-                   "Cannot open serial device %s to %s",
-                   path, name);
+      if (!quiet) {
+        RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+                     "Cannot open serial device %s to %s",
+                     path, name);
+      }
     } else {
       still_unsuccessful = false;
     }
 
     if(still_unsuccessful) {
       retries++;
-      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
-                   "retrying connection for %s (%d of %d)",
-                   name, retries, attempts);
       if (retries == attempts) {
         break;  // no point in waiting after the last attempt
       }
 
+      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+                   "retrying connection for %s (%d of %d)",
+                   name, retries + 1, attempts);
       // No power button press here: the hoverboard's on/off state does not
       // affect opening its tty (USB serial adapter), and with the activator
       // retrying, the presses would toggle the hoverboard every few seconds.
@@ -594,9 +607,11 @@ bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which, con
   }
 
   if(still_unsuccessful) {
-    RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
-                 "Could not open serial device %s to %s",
-                 path, name);
+    if (!quiet) {
+      RCLCPP_FATAL(rclcpp::get_logger("PilsbotDriver"),
+                   "Could not open serial device %s to %s",
+                   path, name);
+    }
     if (*fd != -1)
     {
       ::close(*fd);
@@ -735,10 +750,8 @@ void PilsbotDriver::try_toggle_hoverboard_power()
 
 void PilsbotDriver::forget_head_mcu_values()
 {
-  axle_sensors_.steering_angle_raw = NAN;
-  axle_sensors_.endstop_l = NAN;
-  axle_sensors_.endstop_r = NAN;
-  axle_sensors_.steering_angle_normalized = NAN;
+  std::lock_guard<std::mutex> lock(head_mcu_latest_mutex_);
+  head_mcu_latest_ = SteeringAxleSensors();  // all NaN
 }
 
 void PilsbotDriver::sleep_unless_stopped(const std::chrono::milliseconds duration)
@@ -759,9 +772,13 @@ void PilsbotDriver::read_from_head_mcu_continuously()
   {
     if (head_mcu_fd == -1)
     {
-      // One attempt at a time, so stop_ is noticed within the wait.
-      if (!try_setup_serial(WhichSerial::head_mcu, 1))
+      // One quiet attempt at a time, so stop_ is noticed within the wait
+      // and an unplugged Head MCU does not flood the log every second.
+      if (!try_setup_serial(WhichSerial::head_mcu, 1, true))
       {
+        RCLCPP_WARN_THROTTLE(logger, clock, 10000,
+          "Head_mcu: %s not available, steering angle unknown; retrying every second",
+          params_.head_mcu.tty_device.c_str());
         // The press cannot be done now; read() renews the request every cycle
         // while the hoverboard is silent. A stale request would switch off a
         // hoverboard that came back together with the Head MCU.
@@ -835,12 +852,14 @@ void PilsbotDriver::read_head_mcu_frames()
     auto ret = ::read(head_mcu_fd, &frame, sizeof(head_mcu::Frame));
     if(ret == sizeof(head_mcu::Frame))
     {
-      // Assume a valid frame
-      axle_sensors_.steering_angle_raw = frame.analog0;
-      axle_sensors_.endstop_l = frame.digital0_8.as_bit.bit0;
-      axle_sensors_.endstop_r = frame.digital0_8.as_bit.bit1;
-      axle_sensors_.steering_angle_normalized =
-            interpolator_(frame.analog0);
+      // Assume a valid frame. read() picks it up in the next control cycle.
+      SteeringAxleSensors values;
+      values.steering_angle_raw = frame.analog0;
+      values.endstop_l = frame.digital0_8.as_bit.bit0;
+      values.endstop_r = frame.digital0_8.as_bit.bit1;
+      values.steering_angle_normalized = interpolator_(frame.analog0);
+      std::lock_guard<std::mutex> lock(head_mcu_latest_mutex_);
+      head_mcu_latest_ = values;
     }
     else
     {
