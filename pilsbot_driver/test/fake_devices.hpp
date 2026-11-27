@@ -56,6 +56,23 @@ inline hardware_interface::HardwareInfo pilsbot_hardware_on(
     joint.state_interfaces.push_back(position);
     info.joints.push_back(joint);
   }
+  hardware_interface::ComponentInfo steering;
+  steering.name = "steering_axle_joint";
+  steering.type = "joint";
+  hardware_interface::InterfaceInfo position;
+  position.name = "position";
+  steering.state_interfaces.push_back(position);
+  info.joints.push_back(steering);
+
+  hardware_interface::ComponentInfo sensor;
+  sensor.name = "head_mcu";
+  sensor.type = "sensor";
+  for (const auto * name : {"steering_angle_raw", "endstop_l", "endstop_r"}) {
+    hardware_interface::InterfaceInfo state;
+    state.name = name;
+    sensor.state_interfaces.push_back(state);
+  }
+  info.sensors.push_back(sensor);
   return info;
 }
 
