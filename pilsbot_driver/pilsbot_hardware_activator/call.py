@@ -30,16 +30,17 @@ async def call(node, client, request, timeout_sec, callback_group):
     future = client.call_async(request)
 
     def give_up():
+        # Drop the request first, so a response arriving from now on is ignored.
+        client.remove_pending_request(future)
         if not future.done():
-            client.remove_pending_request(future)
-            # Resumes the awaiting coroutine; the future yields no result.
-            future.cancel()
+            # Completing the future resumes the awaiting coroutine, which then
+            # raises CallTimeout. Not future.cancel(): in Humble's rclpy before
+            # 3.3.16 it does not mark the future done, so the await would
+            # never return.
+            future.set_exception(CallTimeout(client.srv_name, timeout_sec))
 
     timer = node.create_timer(timeout_sec, give_up, callback_group=callback_group)
     try:
-        response = await future
+        return await future
     finally:
         node.destroy_timer(timer)
-    if future.cancelled():
-        raise CallTimeout(client.srv_name, timeout_sec)
-    return response

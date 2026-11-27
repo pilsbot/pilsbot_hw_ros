@@ -154,8 +154,10 @@ def launch_setup(context):
     # Without the controller manager nothing drives or stops the robot. End the
     # whole launch so the container exits: on the robot, useful-scripts'
     # startall.bash then runs disable_motors.bash and systemd starts the stack
-    # again. A Shutdown makes `ros2 launch` exit 0, which startall.bash
-    # (set -e) needs to get to disable_motors.bash.
+    # again. startall.bash disables the motors from an EXIT trap
+    # (pilsbot/useful-scripts#2), so that happens whatever the exit code;
+    # before that trap, its `set -e` skipped disable_motors.bash unless the
+    # stack exited 0. A Shutdown makes `ros2 launch` exit 0 either way.
     shutdown_without_controller_manager = RegisterEventHandler(OnProcessExit(
         target_action=control_node,
         on_exit=[Shutdown(reason='the controller manager (ros2_control_node) exited')]))

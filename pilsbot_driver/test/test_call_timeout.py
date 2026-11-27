@@ -5,9 +5,11 @@ import time
 from controller_manager_msgs.srv import ListHardwareComponents
 import pytest
 import rclpy
+import rclpy.client
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.parameter import Parameter
+from rclpy.task import Future
 
 from pilsbot_hardware_activator.call import call
 from pilsbot_hardware_activator.call import CallTimeout
@@ -101,6 +103,42 @@ def test_gives_up_on_a_service_that_never_answers(context, executor):
     assert task.result().service == '/hung/list'
     assert TIMEOUT <= elapsed < TIMEOUT + 2.0
     # A late response would be dropped.
+    assert not client._pending_requests
+    assert not list(node.timers)
+    hung.destroy_node()
+
+
+class PreHumbleFixFuture(Future):
+    """
+    A Future as in Humble's rclpy before 3.3.16: cancel() does not complete it.
+
+    There, cancel() only flagged the future and never set it done, so a
+    coroutine awaiting it was never resumed.
+    """
+
+    def cancel(self):
+        self.cancel_requested = True
+
+
+def test_gives_up_even_where_cancel_does_not_complete_the_future(
+        context, executor, monkeypatch):
+    monkeypatch.setattr(rclpy.client, 'Future', PreHumbleFixFuture)
+    hung = serve_list_hardware(context, '/hung_old/list')
+    node = rclpy.create_node('caller', context=context)
+    group = ReentrantCallbackGroup()
+    client = node.create_client(ListHardwareComponents, '/hung_old/list', callback_group=group)
+    executor.add_node(node)
+    assert client.wait_for_service(timeout_sec=5.0)
+
+    async def call_it():
+        try:
+            await call(node, client, ListHardwareComponents.Request(), TIMEOUT, group)
+        except CallTimeout as e:
+            return e
+
+    task, elapsed = run(executor, call_it)
+    assert isinstance(task.result(), CallTimeout)
+    assert TIMEOUT <= elapsed < TIMEOUT + 2.0
     assert not client._pending_requests
     assert not list(node.timers)
     hung.destroy_node()
