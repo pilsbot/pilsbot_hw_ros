@@ -48,6 +48,14 @@ def generate_launch_description():
         description='Mapping file in pilsbot_driver/config, e.g. medion_0678.yaml. '
                     'Default: from the robot profile'))
 
+    declared_launch_args.append(DeclareLaunchArgument(
+        'hardware', default_value='real', choices=['real', 'gazebo'],
+        description='real: the robot\'s devices. gazebo: the controller manager '
+                    'runs inside Gazebo (see pilsbot.launch.py).'))
+
+    declared_launch_args.append(DeclareLaunchArgument(
+        'use_sim_time', default_value='false', choices=['true', 'false'],
+        description='Use /clock (true in simulation).'))
 
     included_pilsbot_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([ThisLaunchFileDir(), '/pilsbot.launch.py']),
@@ -57,6 +65,8 @@ def generate_launch_description():
         "description_file" : LaunchConfiguration('description_file'),
         "description_package" : LaunchConfiguration('description_package'),
         "robot_profile" : LaunchConfiguration('robot_profile'),
+        "hardware" : LaunchConfiguration('hardware'),
+        "use_sim_time" : LaunchConfiguration('use_sim_time'),
         }.items()
     )
 
@@ -67,6 +77,7 @@ def generate_launch_description():
         "joystick_device_name" : LaunchConfiguration("joystick_device_name"),
         "joystick_conf" : LaunchConfiguration("joystick_conf"),
         "robot_profile" : LaunchConfiguration('robot_profile'),
+        "use_sim_time" : LaunchConfiguration('use_sim_time'),
         }.items()
     )
 

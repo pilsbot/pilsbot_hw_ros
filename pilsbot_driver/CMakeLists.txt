@@ -86,6 +86,7 @@ if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_hardware_activator test/test_hardware_activator.py)
   ament_add_pytest_test(test_call_timeout test/test_call_timeout.py)
+  ament_add_pytest_test(test_launch_description test/test_launch_description.py)
 endif()
 
 # Keeps the hardware and its controllers active (see pilsbot.launch.py).

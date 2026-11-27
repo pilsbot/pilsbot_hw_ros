@@ -31,6 +31,10 @@ def generate_launch_description():
         description='Mapping file in pilsbot_driver/config, e.g. medion_0678.yaml. '
                     'Default: from the robot profile'))
 
+    declared_launch_args.append(DeclareLaunchArgument(
+        'use_sim_time', default_value='false', choices=['true', 'false'],
+        description='Use /clock (true in simulation).'))
+
     return LaunchDescription(declared_launch_args + [OpaqueFunction(function=launch_setup)])
 
 
@@ -42,6 +46,7 @@ def launch_setup(context):
                             or robot_profile.joystick_device_name)
     joystick_conf = (LaunchConfiguration('joystick_conf').perform(context)
                      or robot_profile.joystick_mapping + '.yaml')
+    use_sim_time = LaunchConfiguration('use_sim_time').perform(context) == 'true'
 
     joystick_mapping_config = PathJoinSubstitution(
         [
@@ -57,7 +62,8 @@ def launch_setup(context):
         parameters=[
             # Humble's joy_node is SDL-based and has no 'dev' parameter.
             {'device_id': joystick_device_id, 'device_name': joystick_device_name},
-            {'coalesce_interval_ms' : 2}    # this might or might not work. Well.
+            {'coalesce_interval_ms' : 2},    # this might or might not work. Well.
+            {'use_sim_time': use_sim_time},
             ],
         output={
             'stdout': 'screen',
@@ -69,7 +75,7 @@ def launch_setup(context):
         package='teleop_acker_joy',
         executable='teleop_acker_node',
         name='teleop_acker_joy_node',
-        parameters=[joystick_mapping_config],
+        parameters=[joystick_mapping_config, {'use_sim_time': use_sim_time}],
         output={
             'stdout': 'screen',
             'stderr': 'screen',

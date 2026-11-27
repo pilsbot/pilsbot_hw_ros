@@ -27,6 +27,7 @@ from pilsbot_description import profile
 
 # <ros2_control name=...> in pilsbot_description's URDF.
 HARDWARE_COMPONENT = 'PilsbotSystem'
+CONTROLLERS = ['joint_state_publisher', 'pilsbot_velocity_controller']
 
 
 def generate_launch_description():
@@ -55,6 +56,15 @@ def generate_launch_description():
         'robot_profile', default_value=TextSubstitution(text='pilsbot'),
         description='Robot profile: a name shipped with pilsbot_description, or a path.'))
 
+    declared_launch_args.append(DeclareLaunchArgument(
+        'hardware', default_value='real', choices=['real', 'gazebo'],
+        description='real: the robot\'s devices through ros2_control_node. gazebo: the '
+                    'controller manager runs inside Gazebo\'s gz_ros2_control plugin.'))
+
+    declared_launch_args.append(DeclareLaunchArgument(
+        'use_sim_time', default_value='false', choices=['true', 'false'],
+        description='Use /clock (true in simulation).'))
+
     return LaunchDescription(declared_launch_args + [OpaqueFunction(function=launch_setup)])
 
 
@@ -64,6 +74,31 @@ def launch_setup(context):
     description_file = LaunchConfiguration('description_file')
     description_package = LaunchConfiguration('description_package')
     robot_profile = profile.load(LaunchConfiguration('robot_profile').perform(context))
+    hardware = LaunchConfiguration('hardware').perform(context)
+    use_sim_time = LaunchConfiguration('use_sim_time').perform(context) == 'true'
+
+    # The controller's geometry comes from the robot profile, use_sim_time from
+    # the launch argument. A params file (not a dict) reaches the controllers'
+    # own nodes, not just the manager.
+    with tempfile.NamedTemporaryFile(
+            'w', prefix='pilsbot_profile_', suffix='.yaml', delete=False) as overrides:
+        yaml.safe_dump({
+            'controller_manager': {'ros__parameters': {'use_sim_time': use_sim_time}},
+            'joint_state_publisher': {'ros__parameters': {'use_sim_time': use_sim_time}},
+            'pilsbot_velocity_controller': {'ros__parameters': {
+                **robot_profile.controller_overrides(), 'use_sim_time': use_sim_time}},
+        }, overrides)
+
+    xacro_hardware_args = [f"hardware:={hardware}"]
+    if hardware == 'real':
+        # Transition: pilsbot_description's use_fake_hardware defaults to true
+        # (Gazebo Classic) until pilsbot/pilsbot_description#6 replaces it with
+        # `hardware`. xacro ignores undeclared arguments, so this line is
+        # harmless afterwards; drop it once #6 is merged.
+        xacro_hardware_args += [" ", "use_fake_hardware:=false"]
+    if hardware == 'gazebo':
+        # gz_ros2_control reads the controller parameters from the URDF.
+        xacro_hardware_args += [" ", f"controller_overrides:={overrides.name}"]
 
     # Get URDF via xacro
     robot_description_content = Command(
@@ -81,7 +116,7 @@ def launch_setup(context):
             "controller_config:=",
             controller_config,
             " ",
-            "use_fake_hardware:=false",
+            *xacro_hardware_args,
             " ",
             f"robot_profile:={robot_profile.path}",
         ]
@@ -97,13 +132,6 @@ def launch_setup(context):
             controller_config,
         ]
     )
-
-    # The controller's geometry comes from the robot profile. A params file
-    # (not a dict) reaches the controller's own node, not just the manager.
-    with tempfile.NamedTemporaryFile(
-            'w', prefix='pilsbot_profile_', suffix='.yaml', delete=False) as overrides:
-        yaml.safe_dump({'pilsbot_velocity_controller': {
-            'ros__parameters': robot_profile.controller_overrides()}}, overrides)
 
     control_node = Node(
         package='controller_manager',
@@ -126,7 +154,7 @@ def launch_setup(context):
         package='robot_state_publisher',
         executable='robot_state_publisher',
         output='both',
-        parameters=[robot_description]
+        parameters=[robot_description, {'use_sim_time': use_sim_time}]
     )
 
     # Controllers are loaded inactive; the activator activates them once the
@@ -147,7 +175,8 @@ def launch_setup(context):
         package="pilsbot_driver",
         executable="hardware_activator",
         parameters=[{'hardware_component': HARDWARE_COMPONENT,
-                     'controllers': ['joint_state_publisher', 'pilsbot_velocity_controller']}],
+                     'controllers': CONTROLLERS,
+                     'use_sim_time': use_sim_time}],
         output="screen",
     )
 
@@ -162,7 +191,13 @@ def launch_setup(context):
         target_action=control_node,
         on_exit=[Shutdown(reason='the controller manager (ros2_control_node) exited')]))
 
-    return [control_node, shutdown_without_controller_manager,
-            spawn_pb_controller, spawn_jsb_controller,
-            hardware_activator,
-            robot_state_publisher_node]
+    common = [spawn_pb_controller, spawn_jsb_controller,
+              hardware_activator,
+              robot_state_publisher_node]
+
+    # In Gazebo the controller manager lives in the gz_ros2_control plugin,
+    # which also activates the hardware itself: the activator then only
+    # activates the controllers.
+    if hardware == 'gazebo':
+        return common
+    return [control_node, shutdown_without_controller_manager] + common
