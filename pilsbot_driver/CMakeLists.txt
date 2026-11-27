@@ -81,6 +81,8 @@ if(BUILD_TESTING)
   target_link_libraries(test_clock_steps pilsbot_driver util)
   # Export the test's clock_gettime() so rcutils in the driver uses it.
   set_target_properties(test_clock_steps PROPERTIES ENABLE_EXPORTS ON)
+  ament_add_gtest(test_head_mcu_loss test/test_head_mcu_loss.cpp TIMEOUT 120)
+  target_link_libraries(test_head_mcu_loss pilsbot_driver util)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_hardware_activator test/test_hardware_activator.py)
 endif()

@@ -58,12 +58,24 @@ private:
   };
 
   void read_from_head_mcu_continuously();
+  void read_head_mcu_frames();
 
   bool set_head_mcu_pin(const bool pin);
 
   bool set_update_period_of_head_mcu(head_mcu::UpdatePeriodMs period_ms);
 
-  bool try_setup_serial(const WhichSerial which);
+  // Opens and configures a serial device, trying `attempts` times 1 s apart.
+  bool try_setup_serial(const WhichSerial which, unsigned attempts);
+  bool try_setup_serial(const WhichSerial which)
+  {
+    return try_setup_serial(which, params_.serial_connect_retries);
+  }
+
+  // Steering angle and endstops become NaN: unknown, the controller halts the wheels.
+  void forget_head_mcu_values();
+
+  // Sleeps up to `duration`, returning early once stop_ is set.
+  void sleep_unless_stopped(std::chrono::milliseconds duration);
 
   void try_toggle_hoverboard_power();
 
@@ -89,11 +101,13 @@ private:
       double txBufferLevel = 0;
   };
 
+  // Written by the Head MCU thread. NaN = unknown: before the first frame
+  // after an activation and while the Head MCU is disconnected.
   struct SteeringAxleSensors {
-      double steering_angle_raw;
-      double endstop_l;     // stupid state interface only allows double
-      double endstop_r;     // stupid state interface only allows double
-      double steering_angle_normalized;
+      double steering_angle_raw = NAN;
+      double endstop_l = NAN;     // stupid state interface only allows double
+      double endstop_r = NAN;     // stupid state interface only allows double
+      double steering_angle_normalized = NAN;
   };
 
   struct Params {

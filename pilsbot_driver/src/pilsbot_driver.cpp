@@ -311,6 +311,10 @@ hardware_interface::CallbackReturn PilsbotDriver::on_activate(const rclcpp_lifec
   last_serial_read = clock.now();
   last_write_tick = clock.now();
 
+  // Unknown until the Head MCU thread reads the first frame; no stale
+  // values from a previous activation.
+  forget_head_mcu_values();
+
   // ok, go on little bird
   stop_ = false;
   reading_function_ = std::thread(&PilsbotDriver::read_from_head_mcu_continuously, this);
@@ -421,7 +425,10 @@ hardware_interface::return_type PilsbotDriver::read(
     RCLCPP_FATAL_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
         "hoverboard: Timeout reading from serial %s. Last data %.1f s ago",
         params_.hoverboard.tty_device.c_str(), (clock.now() - last_serial_read).seconds());
-    //TODO: Is there a better way for controller to know this return value (ERROR)?
+    // NaN only until the Head MCU thread's next frame (within ~5 ms): the
+    // steering value always reflects the Head MCU and is NaN only while that
+    // is disconnected. A hoverboard timeout shows in the stopped wheels and
+    // this log, not in the steering angle.
     axle_sensors_.steering_angle_normalized = NAN;
 
     // Try restarting / starting the thing. The toggle takes about a second,
@@ -488,7 +495,9 @@ hardware_interface::return_type PilsbotDriver::write(
   double actual_speed_l = api->getSpeed1_mms();   // NOTE they are switched!!!
   double actual_speed_r = api->getSpeed0_mms();
 
-  if(axle_sensors_.endstop_l || axle_sensors_.endstop_r) {
+  // NaN (Head MCU disconnected) counts as not hit; the controller halts the
+  // wheels on the NaN steering angle anyway.
+  if(axle_sensors_.endstop_l > 0.5 || axle_sensors_.endstop_r > 0.5) {
         RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 1000,
         "Hit Endstop! If this happens frequently, consider stop doing that.");
     wheel_controller_l = PID();
@@ -514,7 +523,7 @@ void PilsbotDriver::tick()
 }
 
 
-bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which)
+bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which, const unsigned attempts)
 {
   unsigned retries = 0;
   bool still_unsuccessful = true;
@@ -539,7 +548,7 @@ bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which)
       throw new std::runtime_error("Invalid serial device to setup");
   }
 
-  while(retries < params_.serial_connect_retries)
+  while(retries < attempts)
   {
     if ((*fd = ::open(path, O_RDWR | O_NOCTTY | O_NDELAY)) < 0)
     {
@@ -554,7 +563,10 @@ bool PilsbotDriver::try_setup_serial(const PilsbotDriver::WhichSerial which)
       retries++;
       RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
                    "retrying connection for %s (%d of %d)",
-                   name, retries, params_.serial_connect_retries);
+                   name, retries, attempts);
+      if (retries == attempts) {
+        break;  // no point in waiting after the last attempt
+      }
 
       // No power button press here: the hoverboard's on/off state does not
       // affect opening its tty (USB serial adapter), and with the activator
@@ -706,75 +718,130 @@ void PilsbotDriver::try_toggle_hoverboard_power()
   }
 }
 
+void PilsbotDriver::forget_head_mcu_values()
+{
+  axle_sensors_.steering_angle_raw = NAN;
+  axle_sensors_.endstop_l = NAN;
+  axle_sensors_.endstop_r = NAN;
+  axle_sensors_.steering_angle_normalized = NAN;
+}
+
+void PilsbotDriver::sleep_unless_stopped(const std::chrono::milliseconds duration)
+{
+  const auto step = std::chrono::milliseconds(50);
+  for (auto slept = std::chrono::milliseconds(0); slept < duration && !stop_; slept += step) {
+    std::this_thread::sleep_for(step);
+  }
+}
+
+// Runs from on_activate until stop_. A lost Head MCU makes the steering angle
+// and endstops NaN and is reconnected until it is back, without the activator.
 void PilsbotDriver::read_from_head_mcu_continuously()
 {
+  const auto logger = rclcpp::get_logger("PilsbotDriver");
   // outer try-restart-serial-loop
   while(!stop_)
   {
-    if(!set_update_period_of_head_mcu(params_.head_mcu.update_period_ms))
+    if (head_mcu_fd == -1)
     {
-      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+      // One attempt at a time, so stop_ is noticed within the wait.
+      if (!try_setup_serial(WhichSerial::head_mcu, 1))
+      {
+        // The press cannot be done now; read() renews the request every cycle
+        // while the hoverboard is silent. A stale request would switch off a
+        // hoverboard that came back together with the Head MCU.
+        power_toggle_requested_ = false;
+        sleep_unless_stopped(std::chrono::seconds(1));
+        continue;
+      }
+      RCLCPP_INFO(logger, "Head_mcu: reconnected");
+    }
+
+    const bool update_period_set = set_update_period_of_head_mcu(params_.head_mcu.update_period_ms);
+    if (update_period_set)
+    {
+      RCLCPP_INFO(logger, "head_mcu serial connection thread started");
+      read_head_mcu_frames();
+    }
+    else
+    {
+      RCLCPP_ERROR(logger,
           "Head_mcu: could not set update period of %d ms", params_.head_mcu.update_period_ms);
+    }
+    if (stop_)
+    {
+      break;  // shutdown_connections() closes the port (after a last power press)
+    }
+
+    // restart serial connection, perhaps this helps.
+    RCLCPP_WARN(logger, "Head_mcu: connection lost, steering angle unknown; reconnecting.");
+    forget_head_mcu_values();
+    close(head_mcu_fd); // re-connect should re-start controller
+    head_mcu_fd = -1;
+    if (!update_period_set)
+    {
+      sleep_unless_stopped(std::chrono::seconds(1));
+    }
+  }
+}
+
+// Reads frames until stop_ or until the connection fails.
+void PilsbotDriver::read_head_mcu_frames()
+{
+  while(!stop_)
+  {
+    if (power_toggle_requested_)
+    {
+      try_toggle_hoverboard_power();
+      // Drop the requests read() made during the ~1 s press; like Foxy,
+      // press again only if the hoverboard is still silent after it.
+      // Otherwise a hoverboard that just switched on gets switched off again.
+      power_toggle_requested_ = false;
+    }
+
+    // Wait for data with a timeout, so a silent Head MCU cannot block shutdown.
+    struct pollfd pfd{head_mcu_fd, POLLIN, 0};
+    const int ready = ::poll(&pfd, 1, 100 /* ms */);
+    if (ready == 0 || (ready < 0 && errno == EINTR))
+    {
+      continue;
+    }
+    if (ready < 0 || !(pfd.revents & POLLIN))
+    {
+      // poll failed, or hang-up/error without data: never fall through to a
+      // blocking read() that a silent Head MCU would never return from.
+      RCLCPP_ERROR(rclcpp::get_logger("PilsbotDriver"),
+        "Head_mcu: serial connection failed: poll %d, revents 0x%X, %s",
+        ready, static_cast<unsigned>(pfd.revents), ready < 0 ? strerror(errno) : "");
       return;
     }
 
-    RCLCPP_INFO(rclcpp::get_logger("PilsbotDriver"),
-        "head_mcu serial connection thread started");
-    while(!stop_)
+    head_mcu::Frame frame;
+    auto ret = ::read(head_mcu_fd, &frame, sizeof(head_mcu::Frame));
+    if(ret == sizeof(head_mcu::Frame))
     {
-      if (power_toggle_requested_)
+      // Assume a valid frame
+      axle_sensors_.steering_angle_raw = frame.analog0;
+      axle_sensors_.endstop_l = frame.digital0_8.as_bit.bit0;
+      axle_sensors_.endstop_r = frame.digital0_8.as_bit.bit1;
+      axle_sensors_.steering_angle_normalized =
+            interpolator_(frame.analog0);
+    }
+    else
+    {
+      if(ret > 0)
       {
-        try_toggle_hoverboard_power();
-        // Drop the requests read() made during the ~1 s press; like Foxy,
-        // press again only if the hoverboard is still silent after it.
-        // Otherwise a hoverboard that just switched on gets switched off again.
-        power_toggle_requested_ = false;
-      }
-
-      // Wait for data with a timeout, so a silent Head MCU cannot block shutdown.
-      struct pollfd pfd{head_mcu_fd, POLLIN, 0};
-      const int ready = ::poll(&pfd, 1, 100 /* ms */);
-      if (ready == 0)
-      {
-        continue;
-      }
-
-      head_mcu::Frame frame;
-      auto ret = ::read(head_mcu_fd, &frame, sizeof(head_mcu::Frame));
-      if(ret == sizeof(head_mcu::Frame))
-      {
-        // Assume a valid frame
-        axle_sensors_.steering_angle_raw = frame.analog0;
-        axle_sensors_.endstop_l = frame.digital0_8.as_bit.bit0;
-        axle_sensors_.endstop_r = frame.digital0_8.as_bit.bit1;
-        axle_sensors_.steering_angle_normalized =
-              interpolator_(frame.analog0);
+        RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
+            "Head_mcu: serial connection out of sync!");
       }
       else
       {
-        if(ret > 0)
-        {
-          RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
-              "Head_mcu: serial connection out of sync!");
-        }
-        else
-        {
-          auto val = fcntl(head_mcu_fd, F_GETFL, 0);
-          RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 500,
-            "Head_mcu: serial connection closed or something: %zd %s GETFL: 0x%X",
-            ret, strerror(errno), val);
-        }
-        break; // break from inner succeeding-read loop
+        auto val = fcntl(head_mcu_fd, F_GETFL, 0);
+        RCLCPP_ERROR_THROTTLE(rclcpp::get_logger("PilsbotDriver"), clock, 500,
+          "Head_mcu: serial connection closed or something: %zd %s GETFL: 0x%X",
+          ret, strerror(errno), val);
       }
-    }
-    // restart serial connection, perhaps this helps.
-    if (!stop_)
-    {
-      RCLCPP_WARN(rclcpp::get_logger("PilsbotDriver"),
-        "Head_mcu: re-trying serial connection.");
-      close(head_mcu_fd); // re-connect should re-start controller
-      head_mcu_fd = -1;
-      try_setup_serial(WhichSerial::head_mcu);
+      return;
     }
   }
 }
