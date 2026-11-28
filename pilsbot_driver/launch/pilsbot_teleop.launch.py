@@ -57,6 +57,10 @@ def generate_launch_description():
         'use_sim_time', default_value='false', choices=['true', 'false'],
         description='Use /clock (true in simulation).'))
 
+    declared_launch_args.append(DeclareLaunchArgument(
+        'cameras', default_value='true', choices=['true', 'false'],
+        description='false leaves the Gazebo camera sensors out (see pilsbot.launch.py).'))
+
     included_pilsbot_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([ThisLaunchFileDir(), '/pilsbot.launch.py']),
         launch_arguments={
@@ -67,6 +71,7 @@ def generate_launch_description():
         "robot_profile" : LaunchConfiguration('robot_profile'),
         "hardware" : LaunchConfiguration('hardware'),
         "use_sim_time" : LaunchConfiguration('use_sim_time'),
+        "cameras" : LaunchConfiguration('cameras'),
         }.items()
     )
 
