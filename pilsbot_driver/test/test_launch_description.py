@@ -212,6 +212,22 @@ def test_real_runs_on_wall_time_by_default():
         assert parameters(context, nodes(actions)[executable])['use_sim_time'] is False
 
 
+# --- cameras -----------------------------------------------------------------
+
+@pytest.mark.parametrize('hardware', ['real', 'gazebo'])
+def test_cameras_default_to_true_in_xacro(hardware):
+    context, actions = expand('pilsbot.launch.py', hardware=hardware)
+
+    assert xacro_arguments(context, actions)['cameras'] == 'true'
+
+
+@pytest.mark.parametrize('hardware', ['real', 'gazebo'])
+def test_cameras_false_reaches_xacro(hardware):
+    context, actions = expand('pilsbot.launch.py', hardware=hardware, cameras='false')
+
+    assert xacro_arguments(context, actions)['cameras'] == 'false'
+
+
 # --- invalid values ----------------------------------------------------------
 
 @pytest.mark.parametrize('launch_file', ['pilsbot.launch.py', 'pilsbot_teleop.launch.py'])
@@ -228,11 +244,16 @@ def test_an_unknown_use_sim_time_fails_the_launch(launch_file):
         expand(launch_file, use_sim_time='yes')
 
 
+@pytest.mark.parametrize('launch_file', ['pilsbot.launch.py', 'pilsbot_teleop.launch.py'])
+def test_an_unknown_cameras_fails_the_launch(launch_file):
+    with pytest.raises(RuntimeError, match='"cameras".*true.*false'):
+        expand(launch_file, cameras='yes')
+
+
 # --- pass-through and teleop -------------------------------------------------
 
-def test_pilsbot_teleop_passes_hardware_and_use_sim_time_to_both_includes():
-    context, actions = expand('pilsbot_teleop.launch.py', hardware='gazebo', use_sim_time='true')
-
+def include_arguments(context, actions):
+    """The included launch files' arguments, as file name -> {name: value}."""
     includes = {}
     for include in actions:
         if isinstance(include, IncludeLaunchDescription):
@@ -241,10 +262,26 @@ def test_pilsbot_teleop_passes_hardware_and_use_sim_time_to_both_includes():
             includes[pathlib.Path(source.location).name] = {
                 evaluate(context, key): evaluate(context, value)
                 for key, value in include.launch_arguments}
+    return includes
+
+
+def test_pilsbot_teleop_passes_hardware_and_use_sim_time_to_both_includes():
+    context, actions = expand('pilsbot_teleop.launch.py', hardware='gazebo', use_sim_time='true')
+
+    includes = include_arguments(context, actions)
     assert includes['pilsbot.launch.py']['hardware'] == 'gazebo'
     assert includes['pilsbot.launch.py']['use_sim_time'] == 'true'
     assert includes['teleop.launch.py']['use_sim_time'] == 'true'
     assert 'hardware' not in includes['teleop.launch.py']
+
+
+@pytest.mark.parametrize('arguments, expected', [({}, 'true'), ({'cameras': 'false'}, 'false')])
+def test_pilsbot_teleop_passes_cameras_to_the_driver_launch_only(arguments, expected):
+    context, actions = expand('pilsbot_teleop.launch.py', **arguments)
+
+    includes = include_arguments(context, actions)
+    assert includes['pilsbot.launch.py']['cameras'] == expected
+    assert 'cameras' not in includes['teleop.launch.py']
 
 
 @pytest.mark.parametrize('use_sim_time, expected', [('true', True), ('false', False)])
