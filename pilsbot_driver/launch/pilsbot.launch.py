@@ -70,6 +70,11 @@ def generate_launch_description():
         'use_sim_time', default_value='false', choices=['true', 'false'],
         description='Use /clock (true in simulation).'))
 
+    declared_launch_args.append(DeclareLaunchArgument(
+        'cameras', default_value='true', choices=['true', 'false'],
+        description='false leaves the Gazebo camera sensors out of the description '
+                    '(nothing is rendered). No effect with hardware:=real.'))
+
     return LaunchDescription(declared_launch_args + [OpaqueFunction(function=launch_setup)])
 
 
@@ -81,6 +86,7 @@ def launch_setup(context):
     robot_profile = profile.load(LaunchConfiguration('robot_profile').perform(context))
     hardware = LaunchConfiguration('hardware').perform(context)
     use_sim_time = LaunchConfiguration('use_sim_time').perform(context) == 'true'
+    cameras = LaunchConfiguration('cameras').perform(context)
 
     # The controller's geometry comes from the robot profile, use_sim_time from
     # the launch argument. A params file (not a dict) reaches the controllers'
@@ -118,6 +124,8 @@ def launch_setup(context):
             *xacro_hardware_args,
             " ",
             f"robot_profile:={robot_profile.path}",
+            " ",
+            f"cameras:={cameras}",
         ]
     )
 
